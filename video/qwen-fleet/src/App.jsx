@@ -277,7 +277,7 @@ function S05Metrics() {
 function S06Portainer() {
   const steps = [
     ["YAML is truth", "Stacks authored in repo, maintained in the Portainer UI — no other deploy path."],
-    ["Auth", "POST /auth → JWT for user agenticharness"],
+    ["Auth", "POST /auth → JWT for user <portainer user>"],
     ["Deploy", "POST /api/stacks/create/standalone/string?endpointId=N — create + deploy in one call"],
     ["Teardown", "DELETE /api/stacks/&lt;id&gt;?endpointId=N, then re-create by name"],
     ["Hosts", "Databrick ep 3 (3090, router, UI) · DGX Spark ep 4 · RedPCv2 ep 5 (untouched)"],

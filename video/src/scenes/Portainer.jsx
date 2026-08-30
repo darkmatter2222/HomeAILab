@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Card, KV, SceneShell, SceneTitle } from "../ui.jsx";
 
 const STEPS = [
-  { t: 0.4, a: "POST /auth  →  { \"jwt\": \"eyJhbGci…\" }", d: "user agenticharness · role admin · Bearer on every call" },
+  { t: 0.4, a: "POST /auth  →  { \"jwt\": \"eyJhbGci…\" }", d: "user <portainer user> · role admin · Bearer on every call" },
   { t: 1.9, a: "GET /api/endpoints  →  3 · 4 · 5", d: "Databrick (local socket) · DGX Spark · RedPCv2-5090" },
   { t: 3.5, a: "POST /api/stacks/create/standalone/string?endpointId=N", d: "body { Name, EntryPoint, StackFileContent, Prune:true }" },
   { t: 5.1, a: "→ creates + deploys in a single call", d: "Status:1 · ProjectPath /data/compose/<id> · redeploys keep the name" },

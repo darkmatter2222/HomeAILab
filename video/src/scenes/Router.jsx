@@ -69,7 +69,7 @@ export default function Router({ num }) {
           >
             <div style={{ fontFamily: "var(--mono)", fontSize: 13.5 }}>
               <div style={{ color: "var(--ink)" }}>Claude Code  →  router :8010</div>
-              <div style={{ fontSize: 11, color: "var(--ink-faint)", marginTop: 2 }}>ANTHROPIC_BASE_URL=http://192.168.86.48:8010 · key qwen38-router-7f3a9c2e</div>
+              <div style={{ fontSize: 11, color: "var(--ink-faint)", marginTop: 2 }}>ANTHROPIC_BASE_URL=http://192.168.86.48:8010 · key &lt;router key&gt;</div>
             </div>
             {/* live request stream */}
             <svg viewBox="0 0 220 40" style={{ flex: 1, height: 40, minWidth: 120 }}>

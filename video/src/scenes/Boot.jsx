@@ -5,7 +5,7 @@ import { SceneShell, ArchitectureDiagram } from "../ui.jsx";
 const LINES = [
   ["$ claude-cluster.bat", "cmd"],
   ["ANTHROPIC_BASE_URL  http://192.168.86.48:8010", "var(--ink-dim)"],
-  ["AUTH                qwen38-router-7f3a9c2e  ·  model qwen3.8", "var(--ink-dim)"],
+  ["AUTH                <router key>  ·  model qwen3.8", "var(--ink-dim)"],
   ["context             262,144 tokens  ·  thinking OFF", "var(--ink-dim)"],
   ["compact window      245,760  (16K headroom)  ·  max output 8,192", "var(--ink-dim)"],
   ["probing /router/status …", "var(--ink-dim)"],
