@@ -1,0 +1,189 @@
+# ============================================================================
+# Qwen3.8-27B NVFP4 (abliterated/uncensored) on the DGX Spark (GB10 / Blackwell)
+#
+# This is the Blackwell-native path (vs the v1 llama.cpp/Q4_K_M deploy):
+#   Engine   : vLLM arm64/CUDA13  (vllm-arm64-cu13-0.25.1, GB10 Blackwell build)
+#   Model    : Qwen3.8-27B-Uncensored-NVFP4-ModelOpt  (ModelOpt NVFP4, abliterated
+#              via Heretic, MTP head GRAFTED in). Same NVFP4 weights the 5090 runs.
+#   Why NVFP4 on Blackwell: GB10 has dedicated NVFP4 (FP4) tensor cores; the
+#              NVFP4-ModelOpt weights are ~half the size of Q4 and are the fastest
+#              Blackwell path. 19 GiB NVFP4 + fp8 KV fits the 122 GiB unified mem,
+#              so we can run high concurrency for max THROUGHPUT.
+#
+# Tuned for MAX AGGREGATE throughput + low TTFT (thinking hard OFF), keeping the
+# large context. Concurrency sweet spot is swept by qwen3.8-27b/sweep_spark_vllm.sh
+# and set in MAX_NUM_SEQS below.
+#
+# Steady-state downloads NOTHING (model + image already on the Spark); the 25 MiB/s
+# cap only matters for a first fetch.
+# ============================================================================
+services:
+  qwen3.8-27b-dgxsparx:
+    # GB10 (aarch64/Blackwell) vLLM build - already cached on the Spark.
+    image: vllm/vllm-openai:vllm-arm64-cu13-0.25.1-7a33ba9
+    pull_policy: always
+    container_name: qwen3.8-27b-dgxsparx
+    hostname: qwen3.8-27b-dgxsparx
+    restart: unless-stopped
+    init: true
+    ipc: host
+    stop_grace_period: 2m
+
+    ports:
+      - "8006:8006"
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      HF_TOKEN: "${HF_TOKEN:-}"
+
+      # Model already local; point vLLM straight at it (offline after first load).
+      MODEL_DIR: "/models/Qwen3.8-27B-Uncensored-NVFP4-ModelOpt"
+      HF_HOME: "/models/.cache/huggingface"
+      HUGGINGFACE_HUB_CACHE: "/models/.cache/huggingface/hub"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+      VLLM_USE_FLASHINFER_SAMPLER: "1"
+
+      # 25 MiB/s cap (bytes/sec) - only used if the model must be fetched
+      DOWNLOAD_LIMIT_BPS: "26214400"
+
+      # ---- Tunable knobs (edit + redeploy to re-test) ----
+      # CONCURRENCY SWEET SPOT (swept for this NVFP4 build; see sweep_spark_vllm.sh)
+      MAX_NUM_SEQS: "16"
+      MAX_MODEL_LEN: "262144"       # large context (shared across max_num_seqs)
+      MAX_NUM_BATCHED_TOKENS: "8192"
+      KV_CACHE_DTYPE: "fp8"
+      KV_CACHE_MEMORY_BYTES: "0"     # 0 = auto (use most of the 122 GiB)
+      # The GB10 runs a desktop (Xorg/gnome hold ~12 GiB), so vLLM's default
+      # 0.92 GPU-mem target OOMs. 0.85 leaves headroom for weights + fp8 KV + OS.
+      GPU_MEM_UTIL: "0.85"
+      FLASH_ATTN_BACKEND: "FLASHINFER"
+      ENABLE_THINKING: "false"
+      # spec decode: MTP head is grafted in. "on" = --speculative-config mtp/3.
+      # Requires the MTP-drafter unquantized patch (applied below in the entrypoint,
+      # or baked into the image). See qwen3.8-27b/patcher_mtp_fix.py.
+      # HEAD-TO-HEAD (2026-08-23, clean 200-tok decode-only, ignore_eos):
+      #   MTP on  = 19.5 tok/s   (57% acceptance, draft 657 / accepted 378)
+      #   no-spec = 12.5 tok/s
+      # => MTP is the ~1.56x single-stream WIN on this NVFP4/Blackwell build
+      #    (the earlier "59.4 no-spec" baseline was stale/measured at a shorter gen).
+      # Keep "on" for fastest single-stream decode.
+      SPEC_DECODE: "on"
+
+    volumes:
+      - /home/darkmatter2222/models:/models
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      stack:   { soft: 67108864, hard: 67108864 }
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "250m"
+        max-file: "8"
+
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -Eeuo pipefail
+
+        echo
+        echo "======================================================================"
+        echo " Qwen3.8-27B Uncensored NVFP4 - DGX Spark (GB10 / Blackwell)"
+        echo " vLLM arm64/CU13 - ModelOpt NVFP4 - fp8 KV - $${MAX_NUM_SEQS} parallel"
+        echo "======================================================================"
+        echo " Model dir    : $${MODEL_DIR}"
+        echo " max-model-len: $${MAX_MODEL_LEN}   max-num-seqs: $${MAX_NUM_SEQS}"
+        echo " KV           : $${KV_CACHE_DTYPE} ($${KV_CACHE_MEMORY_BYTES} bytes, 0=auto)"
+        echo " Attn         : $${FLASH_ATTN_BACKEND}   thinking: $${ENABLE_THINKING}"
+        echo " Spec decode  : $${SPEC_DECODE}"
+        echo "======================================================================"
+        echo
+
+        # Validate the local model is complete (steady-state needs nothing to fetch)
+        [ -f "$${MODEL_DIR}/model.safetensors" ] || { echo "ERROR: model.safetensors missing in $${MODEL_DIR}"; exit 41; }
+        [ -f "$${MODEL_DIR}/model-mtp-grafted.safetensors" ] && echo "MTP-grafted head present."
+
+        # --- hard thinking OFF + Claude high->xhigh (idempotent, local patch) ---
+        cat > /models/.patch_thinking.py <<'PYEOF'
+        from pathlib import Path
+        p = Path("/models/Qwen3.8-27B-Uncensored-NVFP4-ModelOpt/chat_template.jinja")
+        if p.exists():
+            t = p.read_text(); changed = False
+            m1 = "{# LOCAL_FORCE_THINKING_OFF #}"
+            if m1 not in t:
+                n = "{%- if not messages %}"
+                if n in t:
+                    t = t.replace(n, m1 + "\n{%- set enable_thinking = false %}\n" + n, 1); changed = True
+            if changed: p.write_text(t); print("chat template: thinking forced OFF")
+            else: print("chat template: thinking-off patch already present")
+        PYEOF
+        python3 /models/.patch_thinking.py
+
+        # --- MTP-drafter unquantized patch (idempotent; fixes the NVFP4+MTP load crash) ---
+        # The grafted MTP head ships BF16/full-width, but vLLM builds the drafter's
+        # Qwen3_5DecoderLayer from vllm_config.quant_config (NVFP4). Without this
+        # the drafter weight load asserts on shape. When SPEC_DECODE is on, run the
+        # patcher (already on the /models volume) before vllm serve.
+        if [ "$${SPEC_DECODE}" != "off" ]; then
+          PATCH=/models/Qwen3.8-27B-Uncensored-NVFP4-ModelOpt/.patch_mtp_fix.py
+          if [ -f "$${PATCH}" ]; then
+            echo "Applying MTP-drafter unquantized patch ($${PATCH})..."
+            python3 "$${PATCH}" || { echo "ERROR: MTP patch failed"; exit 42; }
+          else
+            echo "ERROR: MTP patch $${PATCH} missing (spec decode on)"; exit 43;
+          fi
+        fi
+
+        # JSON config flags written to a file to keep the quotes clean.
+        echo "{\"enable_thinking\":$${ENABLE_THINKING}}" > /tmp/ctk.json
+        [ "$${SPEC_DECODE}" != "off" ] && echo "{\"method\":\"mtp\",\"num_speculative_tokens\":3}" > /tmp/spec.json
+
+        # vLLM flag array (bash arrays keep each flag a distinct argument).
+        # (Every shell $ is doubled for Portainer compose interpolation.)
+        ARGS=(
+          "$${MODEL_DIR}"
+          --served-model-name qwen3.8
+          --host 0.0.0.0 --port 8006
+          --language-model-only
+          --max-model-len "$${MAX_MODEL_LEN}"
+          --max-num-seqs "$${MAX_NUM_SEQS}"
+          --max-num-batched-tokens "$${MAX_NUM_BATCHED_TOKENS}"
+          --kv-cache-dtype "$${KV_CACHE_DTYPE}"
+          --gpu-memory-utilization "$${GPU_MEM_UTIL}"
+          --quantization modelopt_fp4
+          --attention-backend "$${FLASH_ATTN_BACKEND}"
+          --enable-chunked-prefill --async-scheduling --enable-prefix-caching
+          --trust-remote-code
+          --default-chat-template-kwargs "$(cat /tmp/ctk.json)"
+          --reasoning-parser qwen3
+          --enable-auto-tool-choice --tool-call-parser qwen3_coder
+        )
+        [ "$${KV_CACHE_MEMORY_BYTES}" != "0" ] && ARGS+=( --kv-cache-memory-bytes "$${KV_CACHE_MEMORY_BYTES}" )
+        if [ "$${SPEC_DECODE}" != "off" ]; then
+          ARGS+=( --speculative-config "$(cat /tmp/spec.json)" )
+          echo "Spec decode (MTP) enabled."
+        fi
+
+        echo "Executing:"; printf ' %q' vllm serve "$${ARGS[@]}"; echo; echo
+        exec vllm serve "$${ARGS[@]}"
+
+    healthcheck:
+      test: [ "CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8006/health',timeout=5).read()\"" ]
+      interval: 30s
+      timeout: 10s
+      retries: 40
+      start_period: 25m

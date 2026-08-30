@@ -1,0 +1,258 @@
+# ============================================================================
+# Qwen3.8-27B (abliterated/uncensored) on RTX 3090 (24 GB) — v2
+#
+# Restores the verified FAST build (RESULTS.md, ~60 tok/s) and — critically —
+# normalizes the llama.cpp API contract so it matches the 5090 vLLM backend
+# behind the router, so the client (Claude Code) sees one identical contract
+# regardless of which GPU answers.
+#
+# What was broken (live stack 51 at discovery):
+#   - model was IQ4_XS (a dev quant), NOT the verified Q4_K_M  -> lower quality
+#   - spec decode OFF (no MTP)  -> ~40 tok/s, not the ~60 the MTP head gives
+#   - `--reasoning off` + NO `--chat-template-file`  -> the llama.cpp server fell
+#     back to the model's *embedded* template, which raises
+#     "System message must be at the beginning" (the 500s = the "contract
+#     mismatch" failures). vLLM (5090) never trips that because it always uses
+#     its own template + `enable_thinking:false`.
+#
+# Design (verified in RESULTS.md against this exact hardware + model):
+#   Engine   : llama.cpp server-cuda12 (best for Qwen3.8 hybrid attn + MTP spec)
+#   Model    : Qwen3.8-27B-Uncensored-Q4_K_M.gguf (fused, MTP head built in, 16 GiB)
+#   Spec dec : --spec-type draft-mtp --spec-draft-n-max 3  (built-in MTP head,
+#              NO separate drafter file -> the ~1.47x speed win, ~60 tok/s)
+#   KV cache : q4_0 / q4_0  (q4 = max precision that fits 24 GB at 262K; fp8 OOMs)
+#   Contract : --chat-template-file (validated agent template, no raise) +
+#              --reasoning auto (mirrors the 5090's thinking-handling) so both
+#              backends behave identically to a Claude-Code client.
+#
+# Downloads: capped 25 MiB/s; the Q4_K_M + template already live in /models, so
+# steady-state restarts download nothing.
+# ============================================================================
+services:
+  qwen38-3090:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda12
+    pull_policy: always
+
+    container_name: qwen38-3090
+    hostname: qwen38-3090
+
+    restart: unless-stopped
+    init: true
+    ipc: host
+    stop_grace_period: 2m
+
+    ports:
+      - "8006:8006"
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+
+      HF_TOKEN: "${HF_TOKEN:-}"
+
+      # 25 MiB/s cap (bytes/sec) - only used on first run; steady-state is 0.
+      DOWNLOAD_LIMIT_BPS: "26214400"
+
+      # ---- verified FAST config (RESULTS.md) ----
+      MODEL_FILE: "Qwen3.8-27B-Uncensored-Q4_K_M.gguf"
+      TOTAL_CONTEXT: "262144"     # full 262K (q4 KV keeps it small on 24 GB)
+      PARALLEL_SLOTS: "1"
+      BATCH_SIZE: "4096"
+      UBATCHE_SIZE: "512"
+      KV_K: "q4_0"
+      KV_V: "q4_0"
+      # Built-in MTP head: the decode speed win (~60 tok/s, 1.47x no-spec).
+      SPEC_TYPE: "draft-mtp"
+      SPEC_N_MAX: "3"             # decoded optimum (median of sweep)
+      FLASH_ATTN: "on"
+      N_GPU_LAYERS: "all"
+      LOAD_MODE: "mmap"
+      # Agent chat template (validated: no "System message must be at the
+      # beginning" raise) -> the 3090 contract matches the 5090.
+      CHAT_TEMPLATE_FILE: "/models/Qwen3.8-27B-Uncensored-GGUF/qwen-fixed-chat-template-v22.jinja"
+
+    volumes:
+      - /home/darkmatter2222/models:/models
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack:
+        soft: 67108864
+        hard: 67108864
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "250m"
+        max-file: "8"
+
+    entrypoint:
+      - /bin/bash
+      - -lc
+
+    command:
+      - |
+        set -Eeuo pipefail
+
+        MODEL_DIR="/models/Qwen3.8-27B-Uncensored-GGUF"
+        TARGET_PATH="$${MODEL_DIR}/$${MODEL_FILE}"
+        TARGET_URL="https://huggingface.co/JonathanColetti/Qwen3.8-27B-Uncensored-GGUF/resolve/main/$${MODEL_FILE}?download=true"
+        RATE="$${DOWNLOAD_LIMIT_BPS}"
+
+        echo
+        echo "======================================================================"
+        echo " Qwen3.8-27B Uncensored — RTX 3090 (v2: fast + contract-matched)"
+        echo " llama.cpp + built-in MTP spec decode — 262K ctx — q4 KV"
+        echo "======================================================================"
+        echo " Target        : $${TARGET_PATH}"
+        echo " Total context : $${TOTAL_CONTEXT}"
+        echo " Parallel      : $${PARALLEL_SLOTS}"
+        echo " Spec type     : $${SPEC_TYPE} (n_max $${SPEC_N_MAX})"
+        echo " KV cache      : $${KV_K} / $${KV_V}"
+        echo " Flash attn    : $${FLASH_ATTN}"
+        echo " Batch/uBatch  : $${BATCH_SIZE} / $${UBATCHE_SIZE}"
+        echo " Chat template : $${CHAT_TEMPLATE_FILE}"
+        echo "======================================================================"
+        echo
+
+        ######################################################################
+        # GPU CHECK
+        ######################################################################
+        command -v nvidia-smi >/dev/null 2>&1 || { echo "ERROR: no nvidia-smi"; exit 40; }
+        nvidia-smi || { echo "ERROR: GPU unusable"; exit 41; }
+        if ! nvidia-smi -L | grep -qiE "3090|GeForce RTX 3090"; then
+          echo "ERROR: RTX 3090 not detected:"; nvidia-smi -L || true; exit 42
+        fi
+        echo "RTX 3090 detected."
+        echo
+
+        ######################################################################
+        # RESUMABLE DOWNLOAD (rate-capped) - steady-state skips this
+        ######################################################################
+        valid_gguf() {
+          local path="$$1"
+          [ -s "$${path}" ] || return 1
+          local magic
+          magic="$$(dd if="$${path}" bs=1 count=4 2>/dev/null || true)"
+          [ "$${magic}" = "GGUF" ]
+        }
+        if [ -f "$${TARGET_PATH}" ] && ! valid_gguf "$${TARGET_PATH}"; then
+          mv "$${TARGET_PATH}" "$${TARGET_PATH}.invalid-$$(date +%Y%m%dT%H%M%S)"
+        fi
+        if ! valid_gguf "$${TARGET_PATH}"; then
+          echo "Downloading $${MODEL_FILE} (capped ~$${RATE} B/s)..."
+          local CURL_ARGS=(--location --fail --show-error --progress-bar
+            --continue-at - --limit-rate "$${RATE}" --connect-timeout 30
+            --retry 999 --retry-delay 5 --retry-max-time 0 --retry-all-errors
+            --speed-limit 1024 --speed-time 60 --output "$${TARGET_PATH}.part")
+          [ -n "$${HF_TOKEN:-}" ] && CURL_ARGS+=(--header "Authorization: Bearer $${HF_TOKEN}")
+          curl "$${CURL_ARGS[@]}" "$${TARGET_URL}"
+          valid_gguf "$${TARGET_PATH}.part" || { echo "ERROR: GGUF validation failed."; exit 31; }
+          mv -f "$${TARGET_PATH}.part" "$${TARGET_PATH}"; sync
+        fi
+        echo "Target model ready: $$(ls -lh "$${TARGET_PATH}")"
+
+        ######################################################################
+        # CHAT TEMPLATE (agent-compatible; fixes the 3090 contract)
+        ######################################################################
+        CHAT_TEMPLATE_PATH="$${CHAT_TEMPLATE_FILE}"
+        if [ -s "$${CHAT_TEMPLATE_PATH}" ] && grep -Fq 'qwen3.8-froggeric-v' "$${CHAT_TEMPLATE_PATH}"; then
+          echo "Chat template present: $${CHAT_TEMPLATE_PATH}"
+        else
+          echo "WARNING: chat template not found at $${CHAT_TEMPLATE_PATH}; llama-server will use the model's embedded template."
+        fi
+
+        ######################################################################
+        # START
+        ######################################################################
+        echo; echo "GPU immediately before model load:"; nvidia-smi; echo
+
+        echo "======================================================================"
+        echo " STARTING LLAMA-SERVER"
+        echo " Target         : $${TARGET_PATH}"
+        echo " Spec type      : $${SPEC_TYPE}  n_max=$${SPEC_N_MAX}"
+        echo " Total context  : $${TOTAL_CONTEXT}"
+        echo " Parallel       : $${PARALLEL_SLOTS}"
+        echo " KV cache       : $${KV_K} / $${KV_V}"
+        echo " Batch/uBatch   : $${BATCH_SIZE} / $${UBATCHE_SIZE}"
+        echo " Flash Attention: $${FLASH_ATTN}"
+        echo "======================================================================"
+        echo
+
+        ARGS=(
+          --model "$${TARGET_PATH}"
+          --alias qwen3.8
+          --host 0.0.0.0
+          --port 8006
+          --fit off
+          --n-gpu-layers "$${N_GPU_LAYERS}"
+          --ctx-size "$${TOTAL_CONTEXT}"
+          --parallel "$${PARALLEL_SLOTS}"
+          --cache-type-k "$${KV_K}"
+          --cache-type-v "$${KV_V}"
+          --batch-size "$${BATCH_SIZE}"
+          --ubatch-size "$${UBATCHE_SIZE}"
+          --flash-attn "$${FLASH_ATTN}"
+          --cont-batching
+          --load-mode "$${LOAD_MODE}"
+          --no-mmproj
+          --jinja
+          # Contract parity with the 5090: the 5090 vLLM runs thinking OFF
+          # (enable_thinking:false) and emits NO `thinking` content blocks.
+          # llama.cpp's `--reasoning auto` would extract thinking blocks and
+          # change the output shape, so force reasoning OFF here too -> the
+          # 3090 emits the same text-only content the 5090 does.
+          --reasoning off
+          --reasoning-format deepseek
+          --reasoning-preserve
+          --metrics
+          --perf
+          --timeout 3600
+          --log-verbosity 3
+          --log-timestamps
+        )
+
+        # Built-in MTP head -> no separate --model-draft file needed.
+        if [ "$${SPEC_TYPE}" = "draft-mtp" ]; then
+          ARGS+=( --spec-type "$${SPEC_TYPE}" --spec-draft-n-max "$${SPEC_N_MAX}" )
+          echo "Spec decode: built-in MTP head (draft-mtp), n_max=$${SPEC_N_MAX}"
+        fi
+
+        # Chat template (contract parity with the 5090). Force thinking OFF
+        # exactly like the 5090 vLLM build (its --default-chat-template-kwargs
+        # "enable_thinking":false), so a Claude-Code client sees no
+        # `thinking` content blocks on either backend. We patch the template in
+        # place (idempotent: only if the knob is still the default `true`).
+        if [ -s "$${CHAT_TEMPLATE_PATH}" ]; then
+          if grep -Fq "set enable_thinking = enable_thinking if enable_thinking is defined else true" "$${CHAT_TEMPLATE_PATH}"; then
+            sed -i "s/set enable_thinking = enable_thinking if enable_thinking is defined else true/set enable_thinking = enable_thinking if enable_thinking is defined else false/" "$${CHAT_TEMPLATE_PATH}"
+            echo "Patched chat template: enable_thinking forced to false (matches 5090)"
+          else
+            echo "Chat template already patched (enable_thinking default not 'true'); using as-is."
+          fi
+          ARGS+=( --chat-template-file "$${CHAT_TEMPLATE_PATH}" )
+        fi
+
+        echo "Executing:"; echo; printf ' %q' /app/llama-server "$${ARGS[@]}"; echo; echo
+        exec /app/llama-server "$${ARGS[@]}"
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS --max-time 5 http://127.0.0.1:8006/health >/dev/null || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 40
+      start_period: 25m

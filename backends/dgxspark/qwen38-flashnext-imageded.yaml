@@ -1,0 +1,224 @@
+# ============================================================================
+# Qwen3.8-Flash-Next (180B MoE) — IMAGE-DEDICATED second instance on DGX Spark
+# ----------------------------------------------------------------------------
+# Portainer stack: qwen38-flashnext-imageded  (endpoint 4, Spark 192.168.86.39)
+#
+# WHY: the router's vision pin (VISION_BACKEND) force-routes every image-bearing
+# request to the Spark. The production ds4 stack (stack 87, :8006) is also the
+# general text backend, so a 3-wide text session can hold all of its capacity
+# and a vision request 500s as "At most 0 image(s)" (it spills to the text-only
+# 5090/3090). This stack adds a STRICTLY image-dedicated second ds4 instance:
+#   * same model + Qwen vision tower (native vision, no mmproj)
+#   * its own /slots shim front door on host :8016 (SLOTS=3)
+#   * registered in the router as a second vision backend (cap 3) so vision
+#     capacity is 3 (prod) + 3 (imageded) = 6, and the pin only 500s when BOTH
+#     vision instances are full (or down).
+#
+# Host port 8016 is published (Spark LAN-reachable 192.168.86.39:8016) so the
+# router on Databrick can reach it; the engine listens on :8100 inside the stack.
+# Both instances share the ds4:spark image (already cached on the Spark) and the
+# /home/darkmatter2222/models mount (read-only PLE cache). Each instance runs its
+# own ds4-server process; the Q6 shards stream from SSD-PLE, so the second copy
+# is dominated by the ~90 GiB pinned host bank (fits the 119 GiB unified memory).
+# ============================================================================
+
+services:
+  qwen3.8-flashnext-imageded:
+    image: ds4:spark
+    container_name: qwen3.8-flashnext-imageded
+    restart: unless-stopped
+    shm_size: 64m
+    working_dir: /opt/ds4
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -Eeuo pipefail
+
+        echo
+        echo "======================================================================"
+        echo " Qwen3.8-Flash-Next (180B MoE) - DGX Spark (GB10) - ds4 SSD-PLE (Q6)"
+        echo " IMAGE-DEDICATED instance - $${CTX_SIZE} ctx - $${COALESCE_MAX} streams"
+        echo "======================================================================"
+        echo " backbone  : $${MODEL}"
+        echo " PLE sidecar: $${PLEDIR} (cache $${PLE_CACHE_MB} MiB, O_DIRECT)"
+        echo "======================================================================"
+        echo
+
+        # ---- 1. Wait for the 4 backbone shards (the engine maps them itself).
+        MODELDIR="$${MODELDIR}"
+        nshard=$$(ls "$${MODELDIR}"/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-0000[1-4]-of-00004.gguf 2>/dev/null | wc -l)
+        want=4
+        while [ "$${nshard}" -lt "$${want}" ]; do
+          echo "Waiting for backbone shards ($${nshard}/$${want}) present in $${MODELDIR} ..."
+          sleep 15
+          nshard=$$(ls "$${MODELDIR}"/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-0000[1-4]-of-00004.gguf 2>/dev/null | wc -l)
+        done
+        echo "All 4 backbone shards present in $${MODELDIR}."
+
+        # ---- 2. Verify the PLE sidecar is complete (manifest + 4 .bin) ----
+        [ -f "$${PLEDIR}/ple-manifest.json" ] || { echo "ERROR: PLE manifest missing in $${PLEDIR}"; exit 41; }
+        for b in ple-bf16-00001-of-00004.bin ple-bf16-00002-of-00004.bin ple-bf16-00003-of-00004.bin ple-bf16-00004-of-00004.bin; do
+          [ -f "$${PLEDIR}/$${b}" ] || { echo "ERROR: PLE sidecar missing: $${b}"; exit 41; }
+        done
+        echo "PLE sidecar complete (4 .bin + manifest)."
+
+        # ---- 3. Run the ds4 server (image-dedicated front door). ----
+        export DS4_QWEN_PLE_CACHE_MB="$${PLE_CACHE_MB}"
+        export DS4_QWEN_PLE_WORKERS="$${PLE_WORKERS}"
+        export DS4_QWEN_PREFILL_CHUNK=8192
+        export DS4_SERVER_COALESCE_MAX="$${COALESCE_MAX}"
+        export DS4_MEMGOV=observe
+        export DS4_NO_UPDATE_CHECK=1
+        export DS4_CHAT_FORMAT_QWEN4EXP=1
+        # --- shed the cont-hold: queue behind a live continuation instead of 503 ---
+        export DS4_SHED_CONT_HOLD="$${DS4_SHED_CONT_HOLD}"
+        export JOB_OUT_SHED_CONT_HOLD="$${JOB_OUT_SHED_CONT_HOLD}"
+
+        DS4=/opt/ds4/ds4-server
+        [ -x "$${DS4}" ] || { echo "ERROR: $${DS4} not found in image"; ls -la /opt/ds4/; exit 42; }
+
+        MTP_ARGS=()
+        if [ "$${USE_MTP}" = "on" ] && [ -f "$${MODELDIR}/$${MTP_FILE}" ]; then
+          MTP_ARGS=( --mtp "$${MODELDIR}/$${MTP_FILE}" --mtp-draft 2 )
+          echo "MTP drafter attached: $${MODELDIR}/$${MTP_FILE}"
+        else
+          echo "MTP spec decode off (no drafter or USE_MTP=off)."
+        fi
+
+        echo "Executing (IMAGE-DEDICATED): $${DS4} -m $${MODEL} --cuda -c $${CTX_SIZE} --port $${ENGINE_PORT}"
+        exec "$${DS4}" \
+          -m "$${MODEL}" --cuda \
+          -c "$${CTX_SIZE}" \
+          --host 0.0.0.0 --port "$${ENGINE_PORT}" \
+          $${MTP_ARGS[@]+"$${MTP_ARGS[@]}"}
+    environment:
+      # --- model / PLE sidecar (mounted from /home/darkmatter2222/models) ---
+      MODEL: /models/flashnext-ds4/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-00001-of-00004.gguf
+      MODELDIR: /models/flashnext-ds4/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16
+      PLEDIR: /models/flashnext-ds4/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16/ple
+      PLE_CACHE_MB: "512"
+      PLE_WORKERS: "16"
+      SHARDS: Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-00001-of-00004.gguf Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-00002-of-00004.gguf Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-00003-of-00004.gguf Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-00004-of-00004.gguf
+      MTP_FILE: mtp-Qwen3.8-Flash-Next-Q4_K_M.gguf
+      USE_MTP: "off"
+      # --- context / concurrency (image-dedicated: same 3-wide as prod) ---
+      CTX_SIZE: "262144"
+      COALESCE_MAX: "3"
+      # engine listens on 8100 (host 8016 is published by the slots-shim)
+      ENGINE_PORT: "8100"
+      # --- 2026-08-29: stop shedding requests while a serial session holds its
+      #     continuation slot. Requests queue behind the live KV instead of 503. ---
+      DS4_SHED_CONT_HOLD: "off"
+      JOB_OUT_SHED_CONT_HOLD: "off"
+      # --- GPU (shared with the prod instance; GB10 unified memory) ---
+      NVIDIA_VISIBLE_DEVICES: "0"
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - /home/darkmatter2222/models:/models:rw
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8100/health',timeout=5).read()\""]
+      interval: 30s
+      timeout: 10s
+      start_period: 150s
+      retries: 40
+    networks:
+      - default
+
+  # ----------------------------------------------------------------------------
+  # /slots shim front door for the image-dedicated instance (host :8016 -> 8100)
+  # Same threaded Python proxy as the prod stack's shim; SLOTS=3 mirrors the
+  # router's SPARK_IMAGEDED_CAP so the llama-style /slots probe is coherent.
+  # ----------------------------------------------------------------------------
+  qwen38-flashnext-imageded-shim:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda12
+    container_name: qwen38-flashnext-imageded-shim
+    restart: unless-stopped
+    working_dir: /app
+    entrypoint: ["/bin/bash", "-lc"]
+    ports:
+      - "8016:8006"
+    environment:
+      MODEL_ID: Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16
+      BACKEND: http://qwen3.8-flashnext-imageded:8100
+      SLOTS: "3"
+    command:
+      - |
+        set -uo pipefail
+        BACKEND="$${BACKEND}"
+        echo "imageded slots-shim: proxying :8006 -> $${BACKEND} (slots=$${SLOTS})"
+
+        # Tiny threaded server: serves /slots + /health + /v1/models itself,
+        # proxies everything else (incl. /v1/chat/completions) to the engine.
+        python3 - <<'PY'
+        import json, threading, socketserver, http.client, http.server, urllib.parse, os, sys
+        BACKEND = os.environ["BACKEND"]; SLOTS = os.environ.get("SLOTS","3"); MODEL_ID = os.environ.get("MODEL_ID","qwen3.8")
+        host, _, port = BACKEND.split("://")[1].partition(":")[2].rpartition(":")
+        class H(http.server.BaseHTTPRequestHandler):
+          protocol_version = "HTTP/1.1"
+          def log_message(self, *a): pass
+          def _path(self):
+            # strip the query string so /slots?fail_on_no_slot=0 still matches /slots
+            return self.path.split("?")[0]
+          def _proxy(self, do_read_body=True):
+            parsed = urllib.parse.urlparse(BACKEND)
+            path = parsed.path + self.path
+            length = int(self.headers.get("Content-Length","0") or "0")
+            body = self.rfile.read(length) if (do_read_body and length) else None
+            conn = http.client.HTTPConnection(parsed.netloc, timeout=None)
+            headers = {k:v for k,v in self.headers.items() if k.lower() not in ("host","connection","content-length")}
+            if body is not None: headers["Content-Length"] = str(len(body))
+            headers["Connection"] = "close"
+            try:
+              conn.request(self.command, path, body=body, headers=headers)
+              r = conn.getresponse(); data = r.read()
+            except Exception as e:
+              self.send_response(502); self.send_header("Content-Type","application/json"); self.end_headers()
+              self.wfile.write(json.dumps({"error":{"message":f"backend {e}","type":"proxy_error"}}).encode()); return
+            self.send_response(r.status)
+            for k,v in r.getheaders():
+              if k.lower() in ("transfer-encoding","connection","content-length"): continue
+              self.send_header(k,v)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers(); self.wfile.write(data)
+            conn.close()
+          def do_POST(self):
+            if self._path() == "/slots":  # llama-style: slot list; engine manages concurrency
+              payload = json.dumps({"n_slots": int(SLOTS), "slots":[{"id":i,"is_processing":False,"state":0} for i in range(int(SLOTS))]}).encode()
+              self.send_response(200); self.send_header("Content-Type","application/json"); self.send_header("Content-Length",str(len(payload))); self.end_headers(); self.wfile.write(payload); return
+            self._proxy(do_read_body=True)
+          def do_GET(self):
+            p = self._path()
+            if p in ("/slots","/health","/healthz"):
+              if p in ("/health","/healthz"):
+                payload = b'{"status":"ok"}'
+              else:
+                payload = json.dumps({"n_slots":int(SLOTS),"slots":[{"id":i,"is_processing":False} for i in range(int(SLOTS))]}).encode()
+              self.send_response(200); self.send_header("Content-Type","application/json"); self.send_header("Content-Length",str(len(payload))); self.end_headers(); self.wfile.write(payload); return
+            if p == "/v1/models":
+              payload = json.dumps({"object":"list","data":[{"id":MODEL_ID,"object":"model","name":MODEL_ID,"context_length":262144}]}).encode()
+              self.send_response(200); self.send_header("Content-Type","application/json"); self.send_header("Content-Length",str(len(payload))); self.end_headers(); self.wfile.write(payload); return
+            self._proxy(do_read_body=False)
+          do_PUT = do_GET
+        class S(socketserver.ThreadingMixIn, socketserver.TCPServer):
+          allow_reuse_address = True
+        H.server_port = 8006
+        S(("0.0.0.0",8006), H).serve_forever()
+        PY
+    depends_on:
+      - qwen3.8-flashnext-imageded
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8006/health',timeout=5).read()\""]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 20
+    networks:
+      - default

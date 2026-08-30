@@ -1,0 +1,167 @@
+# ============================================================================
+# Qwen3.8-Flash-Next (180B MoE, 6B active) - DGX Spark (GB10) - GGUF path
+#
+#   Engine   : llama.cpp w/ PR #27742 (qwen4exp arch) - the only build that
+#              knows `qwen4_exp` / Qwen3.8-Flash-Next. Built ON THE SPARK from
+#              lendome/llama.cpp-qwen4exp (commit 035e227) for aarch64/CUDA13;
+#              image `qwen4exp-llama:q3` (cached on the Spark, no re-pull).
+#   Model    : unsloth/Qwen3.8-Flash-Next-GGUF  UD-Q3_K_XL  (89 GiB weights).
+#              Chosen because the GB10 usable pool is ~103 GiB (122 GiB x 0.85).
+#              Q3_K_XL (89 GiB) leaves ~14 GiB for KV + activations. Q4_K_XL is
+#              111.3 GiB -> EXCEEDS the pool (not a "fits with ~0" edge case).
+#
+#   THE PLE / n-gram table is the real memory consumer, not the KV:
+#     The 51B n-gram PLE is 97.7 GiB at full (BF16) precision -- it's the dominant
+#     cost and it's *optional*. PR#27742 lets you:
+#       (a) pin it to q4_1 via --tensor-type (drops it to ~30.5 GiB), or
+#       (b) run "with no PLE at all" for staged validation (frees the whole pool).
+#     The unsloth Q3_K_XL GGUF ships the PLE *quantized into the file* (that's why
+#     it's 89 GiB, not ~60 GiB). So the 89 GiB already includes a small PLE; KV at
+#     full 262K is only ~4-6 GiB (QSA sparse, 12 of 48 layers, fp8). Total ~95 GiB.
+#
+#   KV cache @ 262K is genuinely small (hybrid attention):
+#     Only the 12 QSA layers keep growing KV (2 KV heads x 256 head-dim, sparse
+#     budget 2048 tokens). The 36 Gated-DeltaNet layers use constant-size receding
+#     states. So full-262K KV is a few GiB, NOT 30+ GiB. Budget headroom for PLE.
+#
+#   Why not FP8 / NVFP4:
+#     FP8 (180 GB) and NVFP4 (135.2 GB on disk, 119.6 GB weights) EXCEED the
+#     ~103 GiB usable pool -> they load then OOM. NVFP4 is also SGLang-only and
+#     was validated on GB300/B300, not GB10. Every fitting quant (Q3/Q4 GGUF)
+#     needs the llama.cpp PR #27742 anyway, so the qwen4exp llama.cpp build is
+#     the deployable fast path; NVFP4/SGLang is the follow-on.
+#
+#   Tuning goals (user): FAST + 3 concurrent + thinking OFF + FULL 262K context.
+#     --parallel 3, --ctx-size 262144 (full, shared pool), --jinja thinking off
+#     (chat template enable_thinking=false), MTP spec decode ON (fused MTP head,
+#     the ~1.5x single-stream win we measured on the 27B NVFP4 stack).
+# ============================================================================
+services:
+  qwen3.8-flashnext-dgxsparx:
+    # qwen4exp llama.cpp (PR #27742), built for the GB10 on the Spark.
+    image: qwen4exp-llama:q3
+    container_name: qwen3.8-flashnext-dgxsparx
+    hostname: qwen3.8-flashnext-dgxsparx
+    restart: unless-stopped
+    init: true
+    ipc: host
+    stop_grace_period: 2m
+
+    ports:
+      - "8006:8006"
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      # llama.cpp uses the system CUDA runtime in the image (CU13.0.2).
+      LD_LIBRARY_PATH: "/usr/local/cuda/lib64:/src/build/lib:${LD_LIBRARY_PATH}"
+
+      MODEL: "/models/Qwen3.8-Flash-Next-GGUF-Q3_K_XL/Qwen3.8-Flash-Next-UD-Q3_K_XL.gguf"
+      # single-file model (the 3 shards are concatenated at download)
+      MODEL_SINGLE: "1"
+
+      # ---- tunable knobs (edit + redeploy) ----
+      PARALLEL: "3"            # 3 concurrent streams (user request)
+      CTX_SIZE: "262144"      # full native context
+      # the 3 shards concatenate to one GGUF (done at startup, idempotent)
+      SHARDS: "Qwen3.8-Flash-Next-UD-Q3_K_XL-00001-of-00003.gguf Qwen3.8-Flash-Next-UD-Q3_K_XL-00002-of-00003.gguf Qwen3.8-Flash-Next-UD-Q3_K_XL-00003-of-00003.gguf"
+      FLASH_ATTN: "on"
+      KV_TYPE: "q8_0"         # Q8_0 KV (full-262K KV is only ~4-6 GiB; QSA is sparse)
+      NGL: "999"             # offload everything to the GB10 (all layers; 999 = all)
+      # PLE / n-gram table: the unsloth Q3_K_XL GGUF already ships it quantized
+      # (that's the 89 GiB). If you later want to shrink it further, PR#27742
+      # supports pinning it to q4_1 via --tensor-type, or dropping it entirely.
+      SPEC_DECODE: "on"       # fused MTP spec decode (draft-mtp, n_max 3)
+      SPEC_N_MAX: "3"
+
+    volumes:
+      - /home/darkmatter2222/models:/models
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      stack:   { soft: 67108864, hard: 67108864 }
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "250m"
+        max-file: "8"
+
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -Eeuo pipefail
+
+        echo
+        echo "======================================================================"
+        echo " Qwen3.8-Flash-Next (180B MoE) - DGX Spark (GB10) - qwen4exp GGUF"
+        echo " llama.cpp PR#27742 - UD-Q3_K_XL - $${PARALLEL} streams - full ctx"
+        echo "======================================================================"
+        echo " Model     : $${MODEL}"
+        echo " parallel  : $${PARALLEL}   ctx: $${CTX_SIZE}   KV: $${KV_TYPE}"
+        echo " flash-attn: $${FLASH_ATTN}   spec-decode: $${SPEC_DECODE} (n_max $${SPEC_N_MAX})"
+        echo "======================================================================"
+        echo
+
+        # Concatenate the 3 GGUF shards into a single model file (idempotent:
+        # re-run only if the combined file is missing or incomplete).
+        MODELDIR="$$(dirname "$${MODEL}")"
+        EXPECT=0
+        for s in $${SHARDS}; do
+          [ -f "$${MODELDIR}/$${s}" ] || { echo "ERROR: shard missing: $${s}"; ls -la "$${MODELDIR}"; exit 40; }
+          EXPECT=$(( $${EXPECT} + $$(stat -c%s "$${MODELDIR}/$${s}") ))
+        done
+        if [ ! -f "$${MODEL}" ] || [ "$$(stat -c%s "$${MODEL}")" -ne "$${EXPECT}" ]; then
+          echo "Concatenating GGUF shards -> $${MODEL} ($${EXPECT} bytes)..."
+          cat "$${MODELDIR}"/$${SHARDS} > "$${MODEL}"
+          echo "Combined model ready: $$(stat -c%s "$${MODEL}") bytes."
+        else
+          echo "Combined model already present ($$(stat -c%s "$${MODEL}") bytes)."
+        fi
+
+        # llama.cpp binary lives in the built image
+        LLAMA=/src/build/bin/llama-server
+        [ -x "$${LLAMA}" ] || { echo "ERROR: $${LLAMA} not found"; ls -la /src/build/bin/; exit 42; }
+
+        # Assemble the server command.
+        ARGS=(
+          "$${MODEL}"
+          --alias qwen3.8
+          --host 0.0.0.0 --port 8006
+          --parallel "$${PARALLEL}"
+          --ctx-size "$${CTX_SIZE}"
+          --flash-attn "$${FLASH_ATTN}"
+          --cache-type-k "$${KV_TYPE}" --cache-type-v "$${KV_TYPE}"
+          --kv-cache-dtype "$${KV_TYPE}"
+          --n-gpu-layers "$${NGL}"
+          --no-mmap
+          --jinja
+          # thinking OFF (matches the 5090/3090): the qwen4exp template honors
+          # enable_thinking; force it false so no reasoning tokens by default.
+          --chat-template-kwargs '{"enable_thinking":false}'
+        )
+        if [ "$${SPEC_DECODE}" != "off" ]; then
+          # fused MTP head ships inside the GGUF (like the 3090 build) -> draft-mtp.
+          ARGS+=( --spec-type draft-mtp --spec-draft-n-max "$${SPEC_N_MAX}" )
+          echo "MTP spec decode enabled (n_max $${SPEC_N_MAX})."
+        fi
+
+        echo "Executing:"; printf ' %q' "$${LLAMA}" "$${ARGS[@]}"; echo; echo
+        exec "$${LLAMA}" "$${ARGS[@]}"
+
+    healthcheck:
+      test: [ "CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8006/health',timeout=5).read()\"" ]
+      interval: 30s
+      timeout: 10s
+      retries: 40
+      start_period: 20m

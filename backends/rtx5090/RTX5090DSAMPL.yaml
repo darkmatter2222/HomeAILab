@@ -1,0 +1,684 @@
+services:
+  qwen38-vllm-5090:
+    image: vllm/vllm-openai:v0.27.1
+    container_name: qwen38-vllm-5090
+    hostname: qwen38-vllm-5090
+
+    restart: unless-stopped
+    init: true
+    ipc: host
+    stop_grace_period: 2m
+
+    ports:
+      - "8006:8006"
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      CUDA_DEVICE_ORDER: "PCI_BUS_ID"
+
+      MODEL_REPO: "joshebbs/qwen3.8-27b-uncensored-nvfp4-modelopt"
+      MODEL_DIR: "/models/Qwen3.8-27B-Uncensored-NVFP4"
+
+      HF_HOME: "/models/.cache/huggingface"
+      HUGGINGFACE_HUB_CACHE: "/models/.cache/huggingface/hub"
+
+      HF_TOKEN: "${HF_TOKEN:-}"
+
+      DOWNLOAD_LIMIT_BPS: "26214400"
+
+      PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+
+      VLLM_USE_FLASHINFER_SAMPLER: "1"
+
+    volumes:
+      - /home/darkmatter2222/models:/models
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+      stack:
+        soft: 67108864
+        hard: 67108864
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "250m"
+        max-file: "8"
+
+    entrypoint:
+      - /bin/bash
+      - -lc
+
+    command:
+      - |
+        set -Eeuo pipefail
+
+        echo
+        echo "======================================================================"
+        echo " Qwen3.8-27B Uncensored NVFP4"
+        echo " RTX 5090 - vLLM 0.27.1 - FULL 262K - FIXED 8.5 GiB KV"
+        echo "======================================================================"
+        echo " Repository   : $${MODEL_REPO}"
+        echo " Model path   : $${MODEL_DIR}"
+        echo " API          : http://0.0.0.0:8006/v1"
+        echo " Anthropic    : http://0.0.0.0:8006/v1/messages"
+        echo " Model alias  : qwen3.8"
+        echo " Context      : 262144"
+        echo " Parallel     : 2"
+        echo " Weights      : NVFP4"
+        echo " KV           : FP8"
+        echo " KV allocation: fixed 8.5 GiB"
+        echo " Spec decode  : OFF (MTP checkpoint incompatible)"
+        echo "======================================================================"
+        echo
+
+        mkdir -p "$${MODEL_DIR}"
+        mkdir -p "$${HF_HOME}"
+
+        ######################################################################
+        # RATE-LIMITED / RESUMABLE MODEL DOWNLOAD
+        #
+        # Aggregate bandwidth cap:
+        # <= 25 MiB/sec
+        ######################################################################
+
+        python3 - <<'PY'
+        import os
+        import time
+        from pathlib import Path
+        from urllib.parse import quote
+
+        import requests
+        from huggingface_hub import HfApi
+
+        repo = os.environ["MODEL_REPO"]
+        root = Path(os.environ["MODEL_DIR"])
+
+        token = os.environ.get("HF_TOKEN") or None
+
+        rate = int(
+            os.environ.get(
+                "DOWNLOAD_LIMIT_BPS",
+                "26214400",
+            )
+        )
+
+        root.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        api = HfApi(
+            token=token,
+        )
+
+        print(
+            f"Inspecting Hugging Face repository: {repo}",
+            flush=True,
+        )
+
+        info = api.model_info(
+            repo_id=repo,
+            files_metadata=True,
+        )
+
+        files = list(
+            info.siblings or []
+        )
+
+        print(
+            f"Repository contains {len(files)} files.",
+            flush=True,
+        )
+
+        print(
+            f"Download limit: "
+            f"{rate / 1024 / 1024:.1f} MiB/s",
+            flush=True,
+        )
+
+        auth_headers = {}
+
+        if token:
+            auth_headers["Authorization"] = (
+                f"Bearer {token}"
+            )
+
+        for item in files:
+
+            rel = item.rfilename
+
+            expected = getattr(
+                item,
+                "size",
+                None,
+            )
+
+            dst = root / rel
+
+            part = Path(
+                str(dst) + ".part"
+            )
+
+            dst.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            ##################################################################
+            # IMPORTANT
+            #
+            # chat_template.jinja is intentionally modified locally for
+            # Claude/Anthropic compatibility.
+            #
+            # Its local size therefore differs from the HF original.
+            # Preserve the local patched version on restart.
+            ##################################################################
+
+            if (
+                rel == "chat_template.jinja"
+                and dst.exists()
+            ):
+
+                print(
+                    "SKIP: chat_template.jinja "
+                    "(local compatibility patch preserved)",
+                    flush=True,
+                )
+
+                continue
+
+            ##################################################################
+            # EXISTING COMPLETE FILE
+            ##################################################################
+
+            if dst.exists():
+
+                if (
+                    expected is None
+                    or dst.stat().st_size == expected
+                ):
+
+                    print(
+                        f"SKIP: {rel}",
+                        flush=True,
+                    )
+
+                    continue
+
+                print(
+                    f"Existing file size is wrong; "
+                    f"replacing: {rel}",
+                    flush=True,
+                )
+
+                dst.unlink()
+
+            ##################################################################
+            # RESUME OFFSET
+            ##################################################################
+
+            offset = (
+                part.stat().st_size
+                if part.exists()
+                else 0
+            )
+
+            encoded = quote(
+                rel,
+                safe="/",
+            )
+
+            url = (
+                f"https://huggingface.co/"
+                f"{repo}/resolve/main/"
+                f"{encoded}?download=true"
+            )
+
+            headers = dict(
+                auth_headers
+            )
+
+            if offset > 0:
+
+                headers["Range"] = (
+                    f"bytes={offset}-"
+                )
+
+                print(
+                    f"RESUME: {rel} at "
+                    f"{offset / 1024 / 1024:.1f} MiB",
+                    flush=True,
+                )
+
+            else:
+
+                print(
+                    f"GET: {rel}",
+                    flush=True,
+                )
+
+            ##################################################################
+            # DOWNLOAD
+            ##################################################################
+
+            response = requests.get(
+                url,
+                headers=headers,
+                stream=True,
+                allow_redirects=True,
+                timeout=(30, 300),
+            )
+
+            ##################################################################
+            # RANGE NOT HONORED
+            ##################################################################
+
+            if (
+                offset > 0
+                and response.status_code != 206
+            ):
+
+                print(
+                    f"Server refused resume for {rel}; "
+                    f"restarting file.",
+                    flush=True,
+                )
+
+                response.close()
+
+                if part.exists():
+                    part.unlink()
+
+                offset = 0
+
+                response = requests.get(
+                    url,
+                    headers=auth_headers,
+                    stream=True,
+                    allow_redirects=True,
+                    timeout=(30, 300),
+                )
+
+            response.raise_for_status()
+
+            mode = (
+                "ab"
+                if offset
+                else "wb"
+            )
+
+            downloaded = 0
+
+            started = (
+                time.monotonic()
+            )
+
+            with open(
+                part,
+                mode,
+            ) as handle:
+
+                for chunk in response.iter_content(
+                    chunk_size=1024 * 1024
+                ):
+
+                    if not chunk:
+                        continue
+
+                    handle.write(
+                        chunk
+                    )
+
+                    downloaded += len(
+                        chunk
+                    )
+
+                    ##########################################################
+                    # 25 MiB/S BANDWIDTH LIMIT
+                    ##########################################################
+
+                    target_elapsed = (
+                        downloaded / rate
+                    )
+
+                    actual_elapsed = (
+                        time.monotonic()
+                        - started
+                    )
+
+                    if (
+                        target_elapsed
+                        > actual_elapsed
+                    ):
+
+                        time.sleep(
+                            target_elapsed
+                            - actual_elapsed
+                        )
+
+            response.close()
+
+            ##################################################################
+            # SIZE VALIDATION
+            ##################################################################
+
+            if expected is not None:
+
+                actual_size = (
+                    part.stat().st_size
+                )
+
+                if actual_size != expected:
+
+                    raise RuntimeError(
+                        f"Size mismatch for {rel}: "
+                        f"{actual_size} != {expected}"
+                    )
+
+            ##################################################################
+            # PROMOTE PARTIAL DOWNLOAD
+            ##################################################################
+
+            os.replace(
+                part,
+                dst,
+            )
+
+            print(
+                f"DONE: {rel}",
+                flush=True,
+            )
+
+        ######################################################################
+        # FINAL VALIDATION
+        ######################################################################
+
+        required = [
+            root / "config.json",
+            root / "tokenizer_config.json",
+            root / "chat_template.jinja",
+        ]
+
+        for path in required:
+
+            if not path.exists():
+
+                raise RuntimeError(
+                    f"Required file missing: {path}"
+                )
+
+        tensors = list(
+            root.rglob(
+                "*.safetensors"
+            )
+        )
+
+        if not tensors:
+
+            raise RuntimeError(
+                "No safetensors files found "
+                "after download."
+            )
+
+        print()
+        print(
+            "============================================================"
+        )
+        print(
+            " MODEL DOWNLOAD / VALIDATION COMPLETE"
+        )
+        print(
+            "============================================================"
+        )
+        print(
+            f"Safetensor files: {len(tensors)}"
+        )
+        print(
+            f"Model directory : {root}"
+        )
+        print(
+            "============================================================"
+        )
+        PY
+
+        ######################################################################
+        # CLAUDE / ANTHROPIC COMPATIBILITY + HARD THINKING OFF
+        #
+        # Qwen3.8 normally enables thinking by default. Claude-style clients
+        # may also send reasoning_effort=high. We hard-force enable_thinking
+        # to false in the model chat template and still normalize high->xhigh
+        # for compatibility if a future request enables reasoning again.
+        ######################################################################
+
+        echo
+        echo "Patching Qwen3.8 template: THINKING OFF + high -> xhigh compatibility"
+
+        python3 - <<'PY'
+        from pathlib import Path
+
+        path = Path(
+            "/models/Qwen3.8-27B-Uncensored-NVFP4/chat_template.jinja"
+        )
+
+        text = path.read_text()
+        changed = False
+
+        # Hard-disable thinking inside the Jinja template itself. This wins even
+        # if the client sends reasoning-related fields.
+        hard_off_marker = "{# LOCAL_FORCE_THINKING_OFF #}"
+        if hard_off_marker not in text:
+            needle = "{%- if not messages %}"
+            if needle not in text:
+                raise RuntimeError(
+                    "Could not locate chat-template insertion point for thinking-off patch"
+                )
+            replacement = (
+                hard_off_marker
+                + "\n{%- set enable_thinking = false %}"
+                + "\n"
+                + needle
+            )
+            text = text.replace(needle, replacement, 1)
+            changed = True
+            print("Patched: enable_thinking forced to false")
+        else:
+            print("Thinking-off patch already present")
+
+        # Keep Claude/OpenAI 'high' effort compatible with Qwen's 'xhigh'.
+        compat_marker = "{# LOCAL_HIGH_TO_XHIGH #}"
+        if compat_marker not in text:
+            needle = (
+                "{%- set resolved_reasoning_effort = "
+                "reasoning_effort|default('xhigh') %}"
+            )
+            if needle in text:
+                replacement = (
+                    needle
+                    + "\n"
+                    + compat_marker
+                    + "\n{%- if resolved_reasoning_effort == 'high' %}"
+                    + "\n{%- set resolved_reasoning_effort = 'xhigh' %}"
+                    + "\n{%- endif %}"
+                )
+                text = text.replace(needle, replacement, 1)
+                changed = True
+                print("Patched: reasoning_effort high -> xhigh")
+            else:
+                # Thinking is hard-off, so this is non-fatal. Keep startup robust
+                # if a future upstream template changes the reasoning block.
+                print("NOTE: reasoning_effort initializer not found; thinking is still forced OFF")
+        else:
+            print("high -> xhigh compatibility patch already present")
+
+        if changed:
+            path.write_text(text)
+            print("Chat template updated")
+        else:
+            print("Chat template already fully patched")
+        PY
+
+        ######################################################################
+        # EVERYTHING LOCAL AFTER CONTROLLED DOWNLOAD
+        ######################################################################
+
+        export HF_HUB_OFFLINE=1
+        export TRANSFORMERS_OFFLINE=1
+
+        ######################################################################
+        # GPU STATUS
+        ######################################################################
+
+        echo
+        echo "======================================================================"
+        echo " GPU STATUS BEFORE vLLM"
+        echo "======================================================================"
+        echo
+
+        nvidia-smi || true
+
+        ######################################################################
+        # CONFIGURATION SUMMARY
+        ######################################################################
+
+        echo
+        echo "======================================================================"
+        echo " STARTING vLLM"
+        echo "======================================================================"
+        echo
+        echo " Base URL      : http://0.0.0.0:8006/v1"
+        echo " OpenAI Chat   : http://0.0.0.0:8006/v1/chat/completions"
+        echo " Anthropic     : http://0.0.0.0:8006/v1/messages"
+        echo " Models        : http://0.0.0.0:8006/v1/models"
+        echo " Health        : http://0.0.0.0:8006/health"
+        echo " Metrics       : http://0.0.0.0:8006/metrics"
+        echo
+        echo " Model alias   : qwen3.8"
+        echo " Context       : 262144"
+        echo " Max sequences : 2"
+        echo
+        echo " Quantization  : ModelOpt NVFP4"
+        echo " KV cache      : FP8"
+        echo " KV allocation : fixed 8.5 GiB"
+        echo
+        echo " Batch tokens  : 8192"
+        echo " Attention     : FLASHINFER"
+        echo " Chunk prefill : ON"
+        echo " Prefix cache  : ON"
+        echo
+        echo " Spec decode   : OFF"
+        echo " Thinking      : HARD OFF"
+        echo " Reasoning map : high -> xhigh"
+        echo
+        echo " Vision        : OFF"
+        echo
+        echo "======================================================================"
+        echo
+
+        ######################################################################
+        # VLLM ARGUMENT ARRAY
+        ######################################################################
+
+        VLLM_ARGS=(
+          "$${MODEL_DIR}"
+
+          "--served-model-name"
+          "qwen3.8"
+
+          "--host"
+          "0.0.0.0"
+
+          "--port"
+          "8006"
+
+          "--language-model-only"
+
+          "--max-model-len"
+          "262144"
+
+          "--max-num-seqs"
+          "2"
+
+          "--max-num-batched-tokens"
+          "8192"
+
+          "--kv-cache-dtype"
+          "fp8"
+
+          "--kv-cache-memory-bytes"
+          "9126805504"
+
+          "--quantization"
+          "modelopt_fp4"
+
+          "--attention-backend"
+          "FLASHINFER"
+
+          "--enable-chunked-prefill"
+
+          "--async-scheduling"
+
+          "--enable-prefix-caching"
+
+          "--trust-remote-code"
+
+          "--default-chat-template-kwargs"
+          '{"enable_thinking":false}'
+
+          "--reasoning-parser"
+          "qwen3"
+
+          "--enable-auto-tool-choice"
+
+          "--tool-call-parser"
+          "qwen3_coder"
+        )
+
+        ######################################################################
+        # PRINT EXACT COMMAND
+        ######################################################################
+
+        echo "Executing:"
+        echo
+
+        printf ' %q' \
+          vllm \
+          serve \
+          "$${VLLM_ARGS[@]}"
+
+        echo
+        echo
+
+        ######################################################################
+        # START vLLM
+        ######################################################################
+
+        exec vllm serve "$${VLLM_ARGS[@]}"
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python3 -c "import urllib.request;
+          urllib.request.urlopen(
+          'http://127.0.0.1:8006/health',
+          timeout=5
+          ).read()"
+
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 45m

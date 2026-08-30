@@ -1,0 +1,9 @@
+# Keep the build context to just the Go tree.
+config/
+scripts/
+tests/
+*.md
+.dockerignore
+llm-router-stack.yaml
+git/
+.git

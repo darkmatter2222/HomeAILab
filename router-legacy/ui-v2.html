@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qwen38 fleet — live traffic</title>
+<style>
+/*
+  palette (validated, dataviz gates, both modes):
+  categorical order: blue, orange, aqua, yellow, magenta, green
+  light: #2a78d6 #eb6834 #1baf7a #eda100 #e87ba4 #008300
+  dark:  #3987e5 #d95926 #199e70 #c98500 #d55181 #008300
+  status (reserved): ok · warn · down — carried with icon + pill label, never color alone.
+  device identity = slot color + name label, never color alone.
+*/
+:root{
+  --bg:#fcfcfb; --panel:#ffffff; --panel2:#f2f4f7; --border:#e3e7ec;
+  --text:#1a2027; --muted:#5d6773;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300;
+  --ok:#1f8a4c; --warn:#b8860b; --down:#c0392b;
+  --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,'Cascadia Code','SF Mono',Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14181f; --panel:#1a2029; --panel2:#222b37; --border:#2e3a4a;
+    --text:#e8edf4; --muted:#8fa0b3;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300;
+    --ok:#3fbf72; --warn:#d9a514; --down:#ff6b57;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14181f; --panel:#1a2029; --panel2:#222b37; --border:#2e3a4a;
+  --text:#e8edf4; --muted:#8fa0b3;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300;
+  --ok:#3fbf72; --warn:#d9a514; --down:#ff6b57;
+}
+:root[data-theme="light"]{
+  --bg:#fcfcfb; --panel:#ffffff; --panel2:#f2f4f7; --border:#e3e7ec;
+  --text:#1a2027; --muted:#5d6773;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300;
+  --ok:#1f8a4c; --warn:#b8860b; --down:#c0392b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px}
+button{font-family:var(--font)}
+
+/* ---------- top bar ---------- */
+.top{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--panel);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.top h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.2px}
+.top .sub{color:var(--muted);font-size:12px}
+.top .sp{flex:1}
+.live{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.live .dot{width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.live.stale .dot{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.iconbtn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:4px 9px;cursor:pointer;font-size:12px}
+.iconbtn:hover{color:var(--text);border-color:var(--muted)}
+
+/* ---------- layout ---------- */
+.wrap{display:grid;grid-template-columns:350px 1fr;gap:14px;padding:14px 20px 26px;max-width:1560px;margin:0 auto}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.panel h2{font-size:11px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin:0 0 10px;font-weight:700}
+
+/* ---------- hero stats ---------- */
+.hero{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.stat .label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;font-weight:700}
+.stat .num{font-family:var(--mono);font-size:26px;font-weight:700;line-height:1.3}
+.stat .sub{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+
+/* ---------- fleet (left) ---------- */
+.dev{display:grid;grid-template-columns:16px 1fr 76px;gap:10px;padding:12px 0;border-top:1px solid var(--border);align-items:start}
+.dev:first-of-type{border-top:0}
+.dev .swatch{width:14px;height:14px;border-radius:4px;margin-top:3px}
+.dev .nm{font-weight:600;font-size:13px}
+.dev .role{font-size:11px;color:var(--muted);margin-top:2px;font-family:var(--mono)}
+.stack{display:flex;gap:2px;height:9px;border-radius:4px;overflow:hidden;background:var(--panel2);margin:9px 0 2px}
+.stack i{display:block;height:100%;width:0;transition:width .45s}
+.stack .s-in{background:var(--s-c)}
+.stack .s-b{background:repeating-linear-gradient(45deg,transparent 0 3px,var(--muted) 3px 4px);opacity:.5}
+.devnote{font-size:10.5px;margin-top:4px;color:var(--muted);min-height:14px}
+.statusline{display:flex;align-items:center;gap:6px;font-size:11px;margin-top:6px}
+.pill{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:10px}
+.pill.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 13%,transparent)}
+.pill.full{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.pill.down{color:var(--down);background:color-mix(in srgb,var(--down) 13%,transparent)}
+.pill.off{color:var(--muted);background:var(--panel2)}
+.dev .right{text-align:right;font-family:var(--mono);line-height:1.55;font-size:11px;color:var(--muted)}
+.dev .big{font-size:20px;font-weight:700;color:var(--text);line-height:1.2}
+
+/* ---------- stream (right) ---------- */
+.streamhead{display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.streamhead h2{margin:0}
+.rate{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.rate b{color:var(--text);font-size:14px}
+.grid2{display:grid;grid-template-columns:1.15fr 1fr;gap:14px;min-width:0}
+.chartbox{background:var(--panel2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+canvas{display:block;width:100%;height:190px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+/* ---------- log table ---------- */
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);font-weight:700}
+td{padding:5.5px 8px;border-bottom:1px solid var(--border);font-family:var(--mono);white-space:nowrap;color:var(--text)}
+tbody tr{animation:slidein .3s ease}
+tbody tr:nth-child(odd){background:color-mix(in srgb,var(--panel2) 35%,transparent)}
+@keyframes slidein{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.tchip{font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:8px}
+.tchip.stream{color:var(--s1);background:color-mix(in srgb,var(--s1) 13%,transparent)}
+.tchip.error{color:var(--down);background:color-mix(in srgb,var(--down) 13%,transparent)}
+.td-dev{color:var(--muted)}
+.code.ok{color:var(--ok);font-weight:700}
+.code.err{color:var(--down);font-weight:700}
+.empty{color:var(--muted);font-family:var(--font)}
+
+/* ---------- login gate ---------- */
+#gate{position:fixed;inset:0;background:var(--bg);z-index:50;display:grid;place-items:center}
+.gatebox{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:30px 34px;width:330px;text-align:center;box-shadow:0 12px 44px rgba(0,0,0,.18)}
+.gatebox .mark{font-size:30px}
+.gatebox h2{margin:8px 0 2px;font-size:17px}
+.gatebox p{color:var(--muted);font-size:12px;margin:0 0 18px}
+.gatebox label{display:block;text-align:left;font-size:11px;color:var(--muted);font-weight:700;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.5px}
+.gatebox input{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:8px;font-family:var(--mono);font-size:13px;outline:none}
+.gatebox input:focus{border-color:var(--s1)}
+.gatebox button{width:100%;margin-top:16px;background:var(--s1);color:#fff;border:0;border-radius:9px;padding:10px;font-weight:700;font-size:13px;cursor:pointer}
+.gatebox button:disabled{opacity:.55;cursor:default}
+.gateerr{color:var(--down);font-size:11.5px;margin-top:10px;min-height:15px;font-family:var(--mono)}
+#app{display:none}
+body.authed #app{display:block}
+body.authed #gate{display:none}
+
+@media (max-width:1180px){ .wrap{grid-template-columns:1fr} }
+@media (max-width:760px){ .hero{grid-template-columns:1fr 1fr} .grid2{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gatebox">
+    <div class="mark">⚡</div>
+    <h2>qwen38 fleet</h2>
+    <p>live traffic console · sign in with fleet creds</p>
+    <form id="gateform">
+      <label for="u">username</label>
+      <input id="u" autocomplete="username" spellcheck="false" autofocus>
+      <label for="p">password</label>
+      <input id="p" type="password" autocomplete="current-password">
+      <div class="gateerr" id="gateerr"></div>
+      <button type="submit" id="gobtn">Sign in</button>
+    </form>
+  </div>
+</div>
+
+<div id="app">
+  <div class="top">
+    <h1>qwen38 fleet · live traffic</h1>
+    <span class="sub">strict-priority ingress &nbsp; 5090 → 3090 → Spark &nbsp;·&nbsp; router :8010</span>
+    <div class="sp"></div>
+    <div class="live" id="live"><span class="dot"></span><span id="livetext">connecting…</span></div>
+    <button class="iconbtn" id="themebtn" title="theme: auto / light / dark">◐</button>
+    <button class="iconbtn" id="outbtn">sign out</button>
+  </div>
+
+  <div class="wrap">
+    <div class="col">
+      <div class="panel" style="flex:1">
+        <h2>fleet · 3 devices</h2>
+        <div id="devs"></div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:10px;line-height:1.55">
+          Bar — <b style="color:var(--text)">solid</b> = busy slots the backend itself reports
+          (vLLM running+waiting · llama busy slots). <b style="color:var(--text)">striped</b> = requests the
+          router has dispatched and is waiting on. Priority = strict routing order.
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="hero" id="hero"></div>
+
+      <div class="panel">
+        <div class="streamhead">
+          <h2>request stream · last 30 s</h2>
+          <div class="rate">throughput <b id="ratesum">0</b> req/s &nbsp;·&nbsp; <b id="reqs30">0</b> requests routed in window</div>
+        </div>
+        <div class="grid2">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">requests / s, by device</div>
+            <div class="chartbox"><canvas id="chart"></canvas></div>
+            <div class="legend" id="legend"></div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">newest activity (2 s ticks, deltas since last tick)</div>
+            <div style="overflow-x:auto;max-height:250px">
+            <table>
+              <thead><tr><th>time</th><th>event</th><th>device</th><th>new reqs</th><th>errors</th></tr></thead>
+              <tbody id="logbody"><tr><td colspan="5" class="empty">waiting for traffic…</td></tr></tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const NAMES = {
+  "red-pcv2-5090": "RedPCv2 · RTX 5090 · vLLM",
+  "databrick-3090": "Databrick · RTX 3090 · llama.cpp",
+  "dgxsparx": "DGX Spark · GB10 · llama.cpp"
+};
+const KNOWN = ["red-pcv2-5090", "databrick-3090", "dgxsparx"];
+const POLL_MS = 2000;
+const W = 30;          // 30-second stream window
+const CH = 30;         // keep last 30 activity rows
+const el = id => document.getElementById(id);
+
+/* ---------- theme (persisted) ---------- */
+const THEME_KEY = "qwen38ui.theme";
+function applyTheme(t){
+  if (t === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+}
+let theme = localStorage.getItem(THEME_KEY) || "auto";
+applyTheme(theme);
+el("themebtn").onclick = () => {
+  theme = theme === "auto" ? "light" : theme === "light" ? "dark" : "auto";
+  applyTheme(theme);
+  localStorage.setItem(THEME_KEY, theme);
+  drawChart();
+};
+
+/* ---------- login ---------- */
+el("gateform").onsubmit = async (e) => {
+  e.preventDefault();
+  el("gateerr").textContent = "";
+  const u = el("u").value, p = el("p").value;
+  const btn = el("gobtn");
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const r = await fetch("/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ u, p }) });
+    if (!r.ok) throw new Error(r.status === 401 ? "bad username or password" : "HTTP " + r.status);
+    const t = (await r.text()).trim();
+    if (!t) throw new Error("no token returned");
+    sessionStorage.setItem("qwen38ui.token", t);
+    document.body.classList.add("authed");
+    poll();
+  } catch (err) {
+    el("gateerr").textContent = err.message || String(err);
+  } finally {
+    btn.disabled = false; btn.textContent = "Sign in";
+  }
+};
+el("outbtn").onclick = () => { sessionStorage.removeItem("qwen38ui.token"); location.reload(); };
+
+/* ---------- hero ---------- */
+function buildHero(){
+  const defs = [
+    { label: "total capacity", num: "h-cap", sub: "live · sum of device caps" },
+    { label: "in-flight now", num: "h-inf", sub: "requests the router has dispatched" },
+    { label: "requests, all time", num: "h-req", sub: "ok + err, since router start" },
+    { label: "last 30 s", num: "h-30", sub: "requests routed in window" },
+  ];
+  defs.forEach(d => {
+    const s = document.createElement("div");
+    s.className = "stat";
+    s.innerHTML = `<div class="label">${d.label}</div><div class="num" id="${d.num}">–</div><div class="sub">${d.sub}</div>`;
+    el("hero").appendChild(s);
+  });
+}
+
+/* ---------- device cards ---------- */
+const devUI = {};
+function buildDevs(backends){
+  const host = el("devs");
+  host.innerHTML = "";
+  backends.forEach((b, i) => {
+    const colorVar = `var(--s${Math.min(i + 1, 6)})`;
+    const row = document.createElement("div");
+    row.className = "dev";
+    row.innerHTML = `
+      <div class="swatch" style="background:${colorVar}"></div>
+      <div>
+        <div class="nm">${NAMES[b.name] || b.name}</div>
+        <div class="role">priority ${b.priority} · ${b.kind}</div>
+        <div class="stack"><i class="s-b"></i><i class="s-in" style="--s-c:${colorVar}"></i></div>
+        <div class="devnote"></div>
+        <div class="statusline"><span class="pill off">…</span></div>
+      </div>
+      <div class="right"><div class="big">–</div><div class="capl">cap –</div><div class="infl">in –</div></div>`;
+    host.appendChild(row);
+    devUI[b.name] = {
+      capEl: row.querySelector(".capl"),
+      infEl: row.querySelector(".infl"),
+      bigEl: row.querySelector(".big"),
+      noteEl: row.querySelector(".devnote"),
+      pillEl: row.querySelector(".pill"),
+      busyBar: row.querySelector(".s-b"),
+      infBar: row.querySelector(".s-in"),
+    };
+  });
+}
+function renderDevs(backends){
+  backends.forEach(b => {
+    const u = devUI[b.name];
+    if (!u) return;
+    const used = b.busy + b.router_inflight, cap = Math.max(1, b.capacity);
+    u.bigEl.textContent = b.available;
+    u.capEl.textContent = "cap " + b.capacity;
+    u.infEl.textContent = "in " + b.router_inflight + (b.req_total ? " · " + b.req_total + " all-time" : "");
+    u.busyBar.style.width = (Math.min(b.busy, cap) / cap * 100) + "%";
+    u.infBar.style.width = (Math.min(b.router_inflight, cap) / cap * 100) + "%";
+    u.noteEl.textContent = b.error ? "⚠ " + b.error : (b.last_probe_age_s != null ? "last probe " + (Math.round(b.last_probe_age_s * 10) / 10) + " s ago" : "");
+    if (!b.healthy) { u.pillEl.className = "pill down"; u.pillEl.textContent = "DOWN"; }
+    else if (b.available <= 0) { u.pillEl.className = "pill full"; u.pillEl.textContent = "FULL"; }
+    else { u.pillEl.className = "pill ok"; u.pillEl.textContent = "READY"; }
+  });
+}
+
+/* ---------- stream series + activity log ---------- */
+const series = [];
+const logRows = [];
+let lastSnap = null;
+function short(n){
+  if (n === "red-pcv2-5090") return "5090";
+  if (n === "databrick-3090") return "3090";
+  if (n === "dgxsparx") return "spark";
+  return n;
+}
+function renderStream(d){
+  const names = d.backends.map(b => b.name);
+  const prev = lastSnap || {};
+  if (lastSnap){
+    const per = {};
+    let total = 0, totalErr = 0;
+    d.backends.forEach(b => {
+      const p = prev[b.name];
+      const delta = p ? Math.max(0, b.req_total - p.req_total) : 0;
+      const deltaErr = p ? Math.max(0, b.req_err - p.req_err) : 0;
+      per[b.name] = delta;
+      total += delta; totalErr += deltaErr;
+    });
+    const now = Date.now();
+    series.push({ t: now, per, total, err: totalErr });
+    while (series.length && now - series[0].t > W * 1000) series.shift();
+    // activity row: only when something moved (no idle spam)
+    const moved = Object.values(per).some(x => x > 0) || totalErr > 0;
+    if (moved){
+      logRows.unshift({
+        t: new Date(now).toLocaleTimeString(),
+        per, err: totalErr,
+      });
+      logRows.length = Math.min(logRows.length, CH);
+      renderLog();
+    }
+  }
+  lastSnap = {};
+  d.backends.forEach(b => lastSnap[b.name] = { req_total: b.req_total, req_err: b.req_err });
+
+  // hero + rates
+  el("h-cap").textContent = d.total_capacity;
+  el("h-inf").textContent = d.total_inflight_router;
+  el("h-req").textContent = (d.requests_total_all || 0).toLocaleString();
+  const r30 = series.reduce((s, x) => s + x.total, 0);
+  el("h-30").textContent = String(r30);
+  el("reqs30").textContent = String(r30);
+  el("ratesum").textContent = series.length ? String(series[series.length - 1].total) : "0";
+
+  renderDevs(d.backends);
+  drawChart();
+}
+function renderLog(){
+  const tb = el("logbody");
+  if (!logRows.length){
+    tb.innerHTML = '<tr><td colspan="5" class="empty">waiting for traffic…</td></tr>';
+    return;
+  }
+  tb.innerHTML = logRows.map(r => {
+    const cells = Object.entries(r.per).filter(([, v]) => v > 0 || r.err > 0).map(([n, v]) =>
+      `<td class="td-dev">${short(n)}</td><td>+${v}</td><td>${r.err > 0 ? "+" + r.err : "–"}</td>`).join("");
+    if (!cells) return "";
+    return `<tr><td>${r.t}</td><td><span class="tchip ${r.err > 0 ? "error" : "stream"}">${r.err > 0 ? "traffic + errors" : "traffic"}</span></td>${cells}</tr>`;
+  }).join("");
+}
+
+/* ---------- chart ---------- */
+const cv = el("chart");
+function deviceColors(){
+  const c = getComputedStyle(document.documentElement);
+  return KNOWN.map((k, i) => c.getPropertyValue("--s" + (i + 1)).trim());
+}
+function chartNames(){
+  if (lastSnap && Object.keys(lastSnap).length) return Object.keys(lastSnap);
+  return KNOWN;
+}
+function drawChart(){
+  const dpr = window.devicePixelRatio || 1;
+  const wcss = cv.clientWidth || 520, hcss = 190;
+  cv.width = Math.round(wcss * dpr);
+  cv.height = Math.round(hcss * dpr);
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, wcss, hcss);
+  const cs = getComputedStyle(document.documentElement);
+  const grid = cs.getPropertyValue("--border").trim();
+  const muted = cs.getPropertyValue("--muted").trim();
+  const names = chartNames();
+  const colors = names.map((_, i) => deviceColors()[Math.min(i, 5)]);
+
+  if (!series.length){
+    ctx.fillStyle = muted; ctx.font = "12px monospace"; ctx.fillText("collecting…", 12, 28);
+    return;
+  }
+  const max = Math.max(1, ...series.flatMap(s => names.map(n => s.per[n] || 0)));
+  const padL = 28, padR = 8, padT = 10, padB = 20;
+  const pw = wcss - padL - padR, ph = hcss - padT - padB;
+  ctx.lineWidth = 1; ctx.strokeStyle = grid;
+  [0, 0.5, 1].forEach(f => {
+    const y = padT + ph * (1 - f);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(wcss - padR, y); ctx.stroke();
+  });
+  ctx.fillStyle = muted; ctx.font = "10px monospace";
+  [0, 0.5, 1].forEach(f => { ctx.fillText(String(Math.round(max * f)), 4, padT + ph * (1 - f) + 3); });
+
+  const tEnd = series[series.length - 1].t, tStart = tEnd - W * 1000;
+  names.forEach((n, i) => {
+    ctx.strokeStyle = colors[i]; ctx.lineWidth = 2; ctx.lineJoin = "round";
+    ctx.beginPath();
+    let started = false;
+    series.forEach(s => {
+      const x = padL + pw * Math.min(1, Math.max(0, (s.t - tStart) / (W * 1000)));
+      const y = padT + ph * (1 - (s.per[n] || 0) / max);
+      if (!started){ ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  });
+  ctx.fillStyle = muted;
+  [0, 15000, 30000].forEach(ms => {
+    const x = padL + pw * (ms / (W * 1000));
+    ctx.fillText(ms === 0 ? "-30s" : (ms === 15000 ? "-15s" : "now"), x - 16, hcss - 5);
+  });
+}
+function buildLegend(){
+  const colors = deviceColors();
+  el("legend").innerHTML = KNOWN.map((k, i) => `<span><i style="background:${colors[i]}"></i>${short(k)}${i + 1 > 3 ? "" : ""}</span>`).join("");
+}
+window.addEventListener("resize", drawChart);
+
+/* ---------- poll ---------- */
+async function poll(){
+  const t = sessionStorage.getItem("qwen38ui.token");
+  if (!t){ location.reload(); return; }
+  try {
+    const r = await fetch("router/status", { headers: { "x-ui-token": t } });
+    if (r.status === 401){ sessionStorage.removeItem("qwen38ui.token"); location.reload(); return; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    if (!el("devs").children.length) buildDevs(d.backends);
+    renderStream(d);
+    el("live").className = "live";
+    el("livetext").textContent = "live · " + new Date().toLocaleTimeString();
+  } catch (e) {
+    el("live").classList.add("stale");
+    el("livetext").textContent = "stale · last ok " + new Date().toLocaleTimeString();
+  }
+  setTimeout(poll, POLL_MS);
+}
+
+/* ---------- boot ---------- */
+buildHero();
+buildLegend();
+drawChart();
+if (sessionStorage.getItem("qwen38ui.token")){
+  document.body.classList.add("authed");
+  poll();
+}
+</script>
+</body>
+</html>

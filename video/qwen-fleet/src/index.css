@@ -1,0 +1,6 @@
+:root {
+  color-scheme: dark;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+html, body, #root { height: 100%; margin: 0; }
+body { background: #0a0f0a; }

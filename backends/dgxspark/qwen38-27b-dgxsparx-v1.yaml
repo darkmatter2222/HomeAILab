@@ -1,0 +1,153 @@
+# ============================================================================
+# Qwen3.8-27B (abliterated/uncensored) on the NVIDIA DGX Spark (GB10)
+# Goal: SAME model + SAME 262K context as the 3090, but MAX total throughput
+# (aggregate decode) + low TTFT, and the concurrency sweet spot.
+#
+#   Engine   : llama.cpp  (ghcr.io/ggml-org/llama.cpp:server-cuda, GB10/CUDA)
+#   Target   : Qwen3.8-27B-Uncensored-Q4_K_M.gguf  (fused, MTP head built in)
+#              - 16 GiB, lives in /home/darkmatter2222/models on the Spark.
+#   Why the Spark scales: GB10 has ~122 GiB unified LPDDR5x -> the whole model
+#              + full 262K q4 KV + many concurrent streams fit, so we can run
+#              --parallel 16 and get ~220 tok/s AGGREGATE decode (vs ~60 on
+#              the 24 GiB 3090 at parallel 1).
+#
+# Tuned (2026-08-23, median of 3, 512-tok steady-state gens @ 262144 ctx):
+#   parallel 16 -> 220.9 tok/s aggregate  (p12=213.5, p8=141, p6=137, p4=111)
+#   TTFT ~0.11 s   prefill ~2.3k-2.7k tok/s @ long context   MTP n_max=3
+#   KV q4_0 (fp8 would fit too, but q4 matches the 3090 and is proven)
+#
+# Self-contained on the Spark (endpoint 4): model is already local, so steady-
+# state downloads nothing (the 25 MiB/s cap only matters for a first fetch).
+# ============================================================================
+services:
+  qwen3.8-27b-dgxsparx:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    pull_policy: always
+    container_name: qwen3.8-27b-dgxsparx
+    hostname: qwen3.8-27b-dgxsparx
+    restart: unless-stopped
+    init: true
+    ipc: host
+    stop_grace_period: 2m
+
+    ports:
+      - "8006:8006"
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      HF_TOKEN: "${HF_TOKEN:-}"
+      # 25 MiB/s cap (bytes/sec) - only used if the model must be fetched
+      DOWNLOAD_LIMIT_BPS: "26214400"
+
+      # ---- Tunable knobs (edit + redeploy to re-test) ----
+      TOTAL_CONTEXT: "262144"     # same large context as the 3090 (thinking off)
+      PARALLEL_SLOTS: "16"        # CONCURRENCY SWEET SPOT (220 tok/s aggregate)
+      BATCH_SIZE: "8192"
+      UBATCHE_SIZE: "1024"
+      KV_K: "q4_0"
+      KV_V: "q4_0"
+      SPEC_TYPE: "draft-mtp"     # built-in MTP head (fused file)
+      SPEC_N_MAX: "3"
+      FLASH_ATTN: "on"
+      N_GPU_LAYERS: "all"
+      LOAD_MODE: "mmap"
+
+    volumes:
+      - /home/darkmatter2222/models:/models
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      stack:   { soft: 67108864, hard: 67108864 }
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "250m"
+        max-file: "8"
+
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -Eeuo pipefail
+
+        MODEL_DIR="/models/Qwen3.8-27B-Uncensored-GGUF"
+        TARGET_FILE="Qwen3.8-27B-Uncensored-Q4_K_M.gguf"
+        TARGET_PATH="$${MODEL_DIR}/$${TARGET_FILE}"
+        TARGET_URL="https://huggingface.co/JonathanColetti/Qwen3.8-27B-Uncensored-GGUF/resolve/main/$${TARGET_FILE}?download=true"
+        CHAT_TEMPLATE_PATH="$${MODEL_DIR}/qwen-fixed-chat-template-v22.jinja"
+        CHAT_TEMPLATE_URL="https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates/resolve/main/chat_template.jinja?download=true"
+        RATE=$$((DOWNLOAD_LIMIT_BPS))
+
+        echo "======================================================================"
+        echo " Qwen3.8-27B Abliterated (Uncensored) - DGX Spark (GB10)"
+        echo " llama.cpp + built-in MTP spec decode - FULL 262K - $${PARALLEL_SLOTS} parallel"
+        echo "======================================================================"
+        echo " Target        : $${TARGET_PATH}"
+        echo " Total context : $${TOTAL_CONTEXT}   parallel: $${PARALLEL_SLOTS}"
+        echo " Spec type     : $${SPEC_TYPE}  (n_max $${SPEC_N_MAX})"
+        echo " KV cache      : $${KV_K} / $${KV_V}   batch/uBatch: $${BATCH_SIZE}/$${UBATCHE_SIZE}"
+        echo " Download limit: $${RATE} B/s"
+        echo "======================================================================"
+
+        valid_gguf() {
+          local path="$$1"; [ -s "$${path}" ] || return 1
+          [ "$$(dd if="$${path}" bs=1 count=4 2>/dev/null)" = "GGUF" ]
+        }
+        if ! valid_gguf "$${TARGET_PATH}"; then
+          echo "Downloading $${TARGET_FILE} (capped $${RATE} B/s)..."
+          curl --location --fail --show-error --progress-bar --continue-at - \
+            --limit-rate "$${RATE}" --connect-timeout 30 \
+            --retry 999 --retry-delay 5 --retry-max-time 0 --retry-all-errors \
+            --output "$${TARGET_PATH}.part" "$${TARGET_URL}"
+          [ -n "$${HF_TOKEN:-}" ] && true
+          valid_gguf "$${TARGET_PATH}.part" || { echo "GGUF validation failed"; exit 31; }
+          mv -f "$${TARGET_PATH}.part" "$${TARGET_PATH}"; sync
+        else
+          echo "Target already present; download skipped."; ls -lh "$${TARGET_PATH}"
+        fi
+        if [ ! -f "$${CHAT_TEMPLATE_PATH}" ]; then
+          curl --location --fail --silent --limit-rate "$${RATE}" \
+            --output "$${CHAT_TEMPLATE_PATH}.tmp" "$${CHAT_TEMPLATE_URL}"
+          grep -Fq 'qwen3.8-froggeric-v' "$${CHAT_TEMPLATE_PATH}.tmp" \
+            || { echo "chat template validation failed"; exit 34; }
+          mv -f "$${CHAT_TEMPLATE_PATH}.tmp" "$${CHAT_TEMPLATE_PATH}"
+        fi
+
+        echo "GPU before load:"; nvidia-smi -L 2>/dev/null || true; echo
+        echo "Starting llama-server (parallel $${PARALLEL_SLOTS}, ctx $${TOTAL_CONTEXT})"
+
+        ARGS=(
+          --model "$${TARGET_PATH}"
+          --alias qwen3.8
+          --host 0.0.0.0 --port 8006
+          --fit off --n-gpu-layers "$${N_GPU_LAYERS}"
+          --ctx-size "$${TOTAL_CONTEXT}" --parallel "$${PARALLEL_SLOTS}"
+          --cache-type-k "$${KV_K}" --cache-type-v "$${KV_V}"
+          --batch-size "$${BATCH_SIZE}" --ubatch-size "$${UBATCHE_SIZE}"
+          --flash-attn "$${FLASH_ATTN}" --cont-batching --load-mode "$${LOAD_MODE}"
+          --no-mmproj --jinja
+          --reasoning auto --reasoning-format deepseek --reasoning-preserve
+          --spec-type "$${SPEC_TYPE}" --spec-draft-n-max "$${SPEC_N_MAX}"
+          --metrics --perf --timeout 3600 --log-verbosity 3 --log-timestamps
+        )
+        [ -f "$${CHAT_TEMPLATE_PATH}" ] && ARGS+=( --chat-template-file "$${CHAT_TEMPLATE_PATH}" )
+        echo "Executing:"; printf ' %q' /app/llama-server "$${ARGS[@]}"; echo
+        exec /app/llama-server "$${ARGS[@]}"
+
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS --max-time 5 http://127.0.0.1:8006/health >/dev/null || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 40
+      start_period: 25m

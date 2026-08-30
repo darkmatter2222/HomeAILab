@@ -1,0 +1,273 @@
+version: "1"
+
+router:
+  bind: "0.0.0.0"
+  port: 8001
+  public_model_aliases:
+    coding: "local-coding"
+  hot_path:
+    perform_health_checks: false
+    query_metrics: false
+    query_gpu_state: false
+    query_models_endpoint: false
+  request:
+    default_max_output_tokens: 16384
+    context_reserve_tokens: 4096
+    context_reserve_percent: 5
+  retry:
+    reservation_retries: 3
+    upstream_connect_retries: 1
+    retry_after_stream_started: false
+
+hosts:
+  # Addresses come from .env (HOST_*). The router reads these via env
+  # interpolation; the stack (llm-router-stack.yaml) passes them through.
+  - id: rtx5090
+    address: "${HOST_5090:-192.168.86.37}"
+    priority: 10
+  - id: rtx3090
+    address: "${HOST_3090:-192.168.86.48}"
+    priority: 20
+  - id: dgxspark
+    address: "${HOST_DGXSPARK:-192.168.86.39}"
+    priority: 30
+
+port_contracts:
+  vllm:      { start: 8200, end: 8299 }
+  llama.cpp: { start: 8100, end: 8199 }
+  sglang:    { start: 8300, end: 8399 }
+  vision:    { start: 8400, end: 8499 }
+
+discovery:
+  enabled: true
+  interval_ms: 5000
+  connect_timeout_ms: 250
+  response_timeout_ms: 750
+  require_manifest: false
+  reject_unknown_runtime: true
+  reject_port_contract_violation: true
+  # 5090 + 3090 are statically seeded (see `endpoints`); discovery_hosts is the
+  # manifest-fetch list (both currently 404 their well-known manifest, so it
+  # only re-affirms the seeds). Addresses from .env (HOST_*).
+  discovery_hosts:
+    - "${HOST_5090:-192.168.86.37}"
+    - "${HOST_3090:-192.168.86.48}"
+    - "${HOST_DGXSPARK:-192.168.86.39}"
+
+health:
+  enabled: true
+  interval_ms: 2000
+  timeout_ms: 750
+  failure_threshold: 2
+  recovery_threshold: 2
+  acceptable_status: [200]
+
+context:
+  classes: [65536, 131072, 262144]
+  reserve_tokens: 4096
+  reserve_percent: 5
+  prefer_smallest_sufficient: true
+
+routing:
+  strategy: deterministic
+  host_order:
+    - rtx5090
+    - rtx3090
+    - dgxspark
+
+capacity_rules:
+  - match:
+      host: rtx5090
+      port: 8201
+    capacity: 1
+  - match:
+      host: rtx3090
+      port: 8101
+    capacity: 1
+  - match:
+      host: dgxspark
+      port: 8401
+    capacity: 3
+
+signature_groups:
+  qwen38_coding:
+    api_family: openai
+    model_family: qwen3.8
+    tool_schema: openai
+    tools: true
+    streaming: true
+    thinking_mode: false
+
+# Static seed (5090 + 3090). The Portainer stack also injects this via the
+# ROUTER_ENDPOINTS_JSON env; the file is the in-repo source of truth.
+#
+# 3090 (Databrick, host port 8101 -> container 8006): llama.cpp server,
+# Qwen3.8-27B-Uncensored-Q4_K_M GGUF, 262144 ctx, MTP spec decode, no vision
+# (--no-mmproj), --reasoning off, --jinja (OpenAI-compat tools), --parallel 1
+# (router static capacity = 1). Priority 20 -> routes AFTER the 5090 (prio 10).
+endpoints:
+  - id: rtx5090-qwen38-262k-01
+    enabled: true
+    host:
+      name: rtx5090
+      address: "${HOST_5090:-192.168.86.37}"
+      gpu_class: RTX_5090
+      priority: 10
+    runtime:
+      type: vllm
+      version: "0.27.1"
+      api_family: openai
+      port: 8201
+    model:
+      canonical_name: Qwen3.8-27B-Uncensored
+      served_model_name: qwen3.8
+      quantization: modelopt_fp4
+    capabilities:
+      text: true
+      vision: false
+      tools: true
+      streaming: true
+      reasoning: true
+    context:
+      max_context_tokens: 262144
+      context_class: "262k"
+    behavior:
+      thinking: false
+      tool_schema: openai
+      tool_call_parser: qwen3_coder
+      reasoning_parser: qwen3
+      chat_template_policy: local-patched-qwen3.8-thinking-off
+    routing:
+      pool: coding
+      static_capacity: 1
+      priority: 10
+      signature_group: qwen38-coding-thinking-off
+    health:
+      path: /health
+    models:
+      path: /v1/models
+    metrics:
+      path: /metrics
+
+  - id: rtx3090-qwen38-262k-01
+    enabled: true
+    host:
+      name: rtx3090
+      address: "${HOST_3090:-192.168.86.48}"
+      gpu_class: RTX_3090
+      priority: 20
+    runtime:
+      type: llama.cpp
+      version: "server-cuda12"
+      api_family: openai
+      port: 8101
+    model:
+      canonical_name: Qwen3.8-27B-Uncensored
+      served_model_name: qwen3.8
+      quantization: q4_k_m
+    capabilities:
+      text: true
+      vision: false
+      tools: true
+      streaming: true
+      reasoning: false
+    context:
+      max_context_tokens: 262144
+      context_class: "262k"
+    behavior:
+      thinking: false
+      tool_schema: openai
+      tool_call_parser: jinja
+      reasoning_parser: deepseek
+      chat_template_policy: qwen-fixed-chat-template-v22
+    routing:
+      pool: coding
+      static_capacity: 1
+      priority: 20
+      signature_group: qwen38-coding-thinking-off
+    health:
+      path: /health
+    models:
+      path: /v1/models
+    metrics:
+      path: /metrics
+
+  - id: dgxspark-flashnext-262k-01
+    enabled: true
+    host:
+      name: dgxspark
+      address: "${HOST_DGXSPARK:-192.168.86.39}"
+      gpu_class: NVIDIA_GB10
+      priority: 30
+    # The Spark Flash-Next backend is reached through a llama.cpp slots-shim on
+    # host port 8401 (container 8006), which lives in the VISION port contract
+    # (8400-8499), so the runtime type is declared `vision` to match its
+    # contract range (a `llama.cpp` type would fall in the 8100-8199 range and
+    # fail ValidatePortContract). The engine behind the shim is the ds4
+    # SSD-PLE Flash-Next (180B MoE), vision-capable, 3 slots.
+    runtime:
+      type: vision
+      version: "ds4-ssd-pole-flashnext"
+      api_family: openai
+      port: 8401
+    model:
+      canonical_name: Qwen3.8-Flash-Next
+      served_model_name: qwen3.8
+      quantization: q6-ssd-ple-bf16
+    capabilities:
+      text: true
+      vision: true
+      tools: true
+      streaming: true
+      reasoning: false
+    context:
+      max_context_tokens: 262144
+      context_class: "262k"
+    behavior:
+      thinking: false
+      tool_schema: openai
+      tool_call_parser: jinja
+      reasoning_parser: deepseek
+      chat_template_policy: flashnext-vision
+    routing:
+      pool: coding
+      static_capacity: 3
+      priority: 30
+      signature_group: qwen38-coding-thinking-off
+    health:
+      path: /health
+    models:
+      path: /v1/models
+    metrics:
+      path: /metrics
+
+leases:
+  enabled: true
+  hard_timeout_seconds: 7200
+
+affinity:
+  enabled: true
+  mode: preferred
+  allow_fallback: true
+
+upstream:
+  connect_timeout_ms: 250
+  # Raised from 750ms to 120s for the DGX Spark Flash-Next (SSD-PLE 180B MoE,
+  # ~60s+ cold TTFT). The slow prefill must be allowed to emit a first byte
+  # before the router declares a pre-stream failure. Global; fast backends
+  # (5090/3090) are unaffected in practice.
+  response_header_timeout_ms: 180000
+
+admin:
+  enabled: true
+  prefix: /admin
+
+metrics:
+  enabled: true
+  path: /metrics
+
+health_path: /health
+
+logging:
+  routing_decisions: true
+  rejected_candidates: true

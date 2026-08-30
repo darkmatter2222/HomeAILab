@@ -1,0 +1,281 @@
+# ============================================================================
+# Qwen3.8-27B (abliterated/uncensored) on RTX 3090 (24 GB)
+# Goal: fastest single-stream decode, on a FRESH 32K context (not 262K).
+#       The Spark recipe = fast single-stream + MTP; the 3090 already has MTP
+#       (draft-mtp, ~42-46 tok/s sustained), so we shed the 262K context for 32K
+#       ("no huge context overhead"). Decode is single-stream (parallel 1).
+#
+# Design (verified against model + hardware):
+#   Engine   : llama.cpp (best for Qwen3.8 hybrid linear-attention + MTP spec)
+#   Target   : Qwen3.8-27B-Uncensored-Q4_K_M.gguf  (fused, MTP head built in)
+#              - 16.8 GiB. PPL 7.181 (near-f16, imatrix built). Abliterated:
+#                refusal directions removed via Heretic LoRA-merge.
+#   Spec dec : --spec-type draft-mtp  (built-in 1-layer MTP head, ~0.3 GiB,
+#              NO separate drafter file needed -> saves the 1.9 GiB DSpark head)
+#   KV cache : q4_0 / q4_0
+#              Qwen3.8-27B is hybrid: only 16/64 layers are full-attention
+#              (48 are linear/Mamba-like), GQA kv_heads=4 head_dim=256.
+#              32768 tokens * q4 KV ~= 0.5 GiB  (262K would be ~4.0 GiB).
+#   VRAM math (24576 MiB, ~23.5 GiB usable):
+#              target 16.8 + MTP head 0.3 + KV 0.5 + graph/overhead ~2.4 = ~20 GiB
+#              -> ~3.5 GiB more headroom than the old 262K build.
+#   Downloads: capped at 25 MiB/s (26214400 B/s) -> only used on first run;
+#              the Q4_K_M target already lives in /models, so steady-state is 0.
+# ============================================================================
+services:
+  qwen3.8-27b-mtp-3090:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda12
+    pull_policy: always
+
+    container_name: qwen3.8-27b-mtp-3090
+    hostname: qwen3.8-27b-mtp-3090
+
+    restart: unless-stopped
+    init: true
+    ipc: host
+    stop_grace_period: 2m
+
+    ports:
+      - "8006:8006"
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+
+      HF_TOKEN: "${HF_TOKEN:-}"
+
+      # 25 MiB/s cap (bytes/sec)
+      DOWNLOAD_LIMIT_BPS: "26214400"
+
+      # ---- Tunable knobs (edit + redeploy to re-test) ----
+      TOTAL_CONTEXT: "32768"      # fresh 32K context (shed the 262K overhead)
+      PARALLEL_SLOTS: "1"
+      BATCH_SIZE: "4096"
+      UBATCHE_SIZE: "512"
+      KV_K: "q4_0"
+      KV_V: "q4_0"
+      SPEC_TYPE: "draft-mtp"
+      # Tuned: n_max=3 is the decode optimum for the built-in MTP head (median
+      # 59.8 tok/s vs 56.8 @4, 52.8 @5; no-spec baseline 40.6 -> ~1.47x).
+      SPEC_N_MAX: "3"
+      FLASH_ATTN: "on"
+      N_GPU_LAYERS: "all"
+      LOAD_MODE: "mmap"
+
+    volumes:
+      - /home/darkmatter2222/models:/models
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack:
+        soft: 67108864
+        hard: 67108864
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "250m"
+        max-file: "8"
+
+    entrypoint:
+      - /bin/bash
+      - -lc
+
+    command:
+      - |
+        set -Eeuo pipefail
+
+        MODEL_DIR="/models/Qwen3.8-27B-Uncensored-GGUF"
+        TARGET_FILE="Qwen3.8-27B-Uncensored-Q4_K_M.gguf"
+        TARGET_PATH="$${MODEL_DIR}/$${TARGET_FILE}"
+        TARGET_URL="https://huggingface.co/JonathanColetti/Qwen3.8-27B-Uncensored-GGUF/resolve/main/$${TARGET_FILE}?download=true"
+
+        CHAT_TEMPLATE_PATH="$${MODEL_DIR}/qwen-fixed-chat-template-v22.jinja"
+        CHAT_TEMPLATE_URL="https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates/resolve/main/chat_template.jinja?download=true"
+
+        RATE=$$((DOWNLOAD_LIMIT_BPS))
+
+        echo
+        echo "======================================================================"
+        echo " Qwen3.8-27B Abliterated (Uncensored) — RTX 3090"
+        echo " llama.cpp + built-in MTP spec decode — 32K ctx — q4 KV"
+        echo "======================================================================"
+        echo " Target        : $${TARGET_PATH}"
+        echo " Total context : $${TOTAL_CONTEXT}"
+        echo " Parallel      : $${PARALLEL_SLOTS}  (ctx/slot $$((TOTAL_CONTEXT / PARALLEL_SLOTS)))"
+        echo " Spec type     : $${SPEC_TYPE}  (n_max $${SPEC_N_MAX})"
+        echo " KV cache      : $${KV_K} / $${KV_V}"
+        echo " Flash attn    : $${FLASH_ATTN}"
+        echo " Batch/uBatch  : $${BATCH_SIZE} / $${UBATCHE_SIZE}"
+        echo " Download limit: $${RATE} B/s"
+        echo "======================================================================"
+        echo
+
+        ######################################################################
+        # GPU CHECK
+        ######################################################################
+        command -v nvidia-smi >/dev/null 2>&1 || { echo "ERROR: no nvidia-smi"; exit 40; }
+        nvidia-smi || { echo "ERROR: GPU unusable"; exit 41; }
+        nvidia-smi -L
+        if ! nvidia-smi -L | grep -qiE "3090|GeForce RTX 3090"; then
+          echo "ERROR: RTX 3090 not detected:"; nvidia-smi -L || true; exit 42
+        fi
+        echo "RTX 3090 detected."
+        echo
+
+        ######################################################################
+        # VALIDATION + RATE-CAPPED RESUMABLE DOWNLOADS (25 MiB/s)
+        ######################################################################
+        valid_gguf() {
+          local path="$$1"
+          [ -s "$${path}" ] || return 1
+          local magic
+          magic="$$(dd if="$${path}" bs=1 count=4 2>/dev/null || true)"
+          [ "$${magic}" = "GGUF" ]
+        }
+
+        download_gguf() {
+          local label="$$1" final_path="$$2" part_path="$$3" url="$$4"
+          echo; echo "Checking: $${label}"
+          if [ -f "$${final_path}" ]; then
+            if valid_gguf "$${final_path}"; then
+              echo "$${label} already present; download skipped."
+              ls -lh "$${final_path}"; return 0
+            fi
+            echo "Existing file invalid; moving aside."
+            mv "$${final_path}" "$${final_path}.invalid-$$(date +%Y%m%dT%H%M%S)"
+          fi
+          echo "Downloading $${label} (capped ~$${RATE} B/s)..."
+          local CURL_ARGS=(
+            --location --fail --show-error --progress-bar
+            --continue-at - --limit-rate "$${RATE}"
+            --connect-timeout 30
+            --retry 999 --retry-delay 5 --retry-max-time 0 --retry-all-errors
+            --speed-limit 1024 --speed-time 60
+            --output "$${part_path}"
+          )
+          [ -n "$${HF_TOKEN:-}" ] && CURL_ARGS+=(--header "Authorization: Bearer $${HF_TOKEN}")
+          curl "$${CURL_ARGS[@]}" "$${url}"
+          valid_gguf "$${part_path}" || { echo "ERROR: GGUF validation failed."; exit 31; }
+          mv -f "$${part_path}" "$${final_path}"; sync
+          echo "$${label} download complete."; ls -lh "$${final_path}"
+        }
+
+        mkdir -p "$${MODEL_DIR}"
+        download_gguf "Qwen3.8-27B Uncensored Q4_K_M target (fused+MTP)" \
+          "$${TARGET_PATH}" "$${TARGET_PATH}.part" "$${TARGET_URL}"
+
+        if ! valid_gguf "$${TARGET_PATH}"; then
+          echo "ERROR: Target GGUF validation failed."; exit 32
+        fi
+
+        ######################################################################
+        # CHAT TEMPLATE (agent-compatible, thinking handling)
+        ######################################################################
+        valid_agent_template() {
+          local path="$$1"
+          [ -s "$${path}" ] || return 1
+          grep -Fq 'qwen3.8-froggeric-v' "$${path}" || return 1
+          return 0
+        }
+        echo "Preparing Qwen agent chat template..."
+        if valid_agent_template "$${CHAT_TEMPLATE_PATH}"; then
+          echo "Chat template already present."
+        else
+          rm -f "$${CHAT_TEMPLATE_PATH}.tmp"
+          local CURL_ARGS=(--location --fail --silent --show-error --connect-timeout 30
+            --retry 20 --retry-delay 3 --retry-all-errors
+            --limit-rate "$${RATE}" --output "$${CHAT_TEMPLATE_PATH}.tmp")
+          [ -n "$${HF_TOKEN:-}" ] && CURL_ARGS+=(--header "Authorization: Bearer $${HF_TOKEN}")
+          curl "$${CURL_ARGS[@]}" "$${CHAT_TEMPLATE_URL}"
+          valid_agent_template "$${CHAT_TEMPLATE_PATH}.tmp" || {
+            echo "ERROR: chat template validation failed"; rm -f "$${CHAT_TEMPLATE_PATH}.tmp"; exit 34; }
+          mv -f "$${CHAT_TEMPLATE_PATH}.tmp" "$${CHAT_TEMPLATE_PATH}"; sync
+        fi
+
+        ######################################################################
+        # GPU STATUS + START
+        ######################################################################
+        echo; echo "GPU immediately before model load:"; nvidia-smi; echo
+
+        echo "======================================================================"
+        echo " STARTING LLAMA-SERVER"
+        echo " GPU            : RTX 3090"
+        echo " Target         : Qwen3.8-27B Uncensored Q4_K_M (fused MTP)"
+        echo " Spec type      : $${SPEC_TYPE}  n_max=$${SPEC_N_MAX}"
+        echo " Total context  : $${TOTAL_CONTEXT}"
+        echo " Parallel       : $${PARALLEL_SLOTS}"
+        echo " Target KV      : $${KV_K} / $${KV_V}"
+        echo " Batch/uBatch   : $${BATCH_SIZE} / $${UBATCHE_SIZE}"
+        echo " Flash Attention: $${FLASH_ATTN}"
+        echo " Auto fit       : OFF"
+        echo "======================================================================"
+        echo
+
+        ARGS=(
+          --model "$${TARGET_PATH}"
+          --alias qwen3.8
+          --host 0.0.0.0
+          --port 8006
+          --fit off
+          --n-gpu-layers "$${N_GPU_LAYERS}"
+          --ctx-size "$${TOTAL_CONTEXT}"
+          --parallel "$${PARALLEL_SLOTS}"
+          --cache-type-k "$${KV_K}"
+          --cache-type-v "$${KV_V}"
+          --batch-size "$${BATCH_SIZE}"
+          --ubatch-size "$${UBATCHE_SIZE}"
+          --flash-attn "$${FLASH_ATTN}"
+          --cont-batching
+          --load-mode "$${LOAD_MODE}"
+          --no-mmproj
+          --jinja
+          --reasoning auto
+          --reasoning-format deepseek
+          --reasoning-preserve
+          --metrics
+          --perf
+          --timeout 3600
+          --log-verbosity 3
+          --log-timestamps
+        )
+
+        # Built-in MTP head (fused) -> no separate --model-draft file needed.
+        if [ "$${SPEC_TYPE}" = "draft-mtp" ]; then
+          ARGS+=( --spec-type "$${SPEC_TYPE}" --spec-draft-n-max "$${SPEC_N_MAX}" )
+          echo "Spec decode: built-in MTP head (draft-mtp), n_max=$${SPEC_N_MAX}"
+        else
+          echo "Spec type $${SPEC_TYPE} set (drafter file expected for non-MTP types)."
+          ARGS+=( --spec-type "$${SPEC_TYPE}" --spec-draft-n-max "$${SPEC_N_MAX}" )
+        fi
+
+        # Chat template
+        if [ -f "$${CHAT_TEMPLATE_PATH}" ]; then
+          ARGS+=( --chat-template-file "$${CHAT_TEMPLATE_PATH}" )
+        fi
+
+        echo "Executing:"; echo; printf ' %q' /app/llama-server "$${ARGS[@]}"; echo; echo
+
+        exec /app/llama-server "$${ARGS[@]}"
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS --max-time 5 http://127.0.0.1:8006/health >/dev/null || exit 1
+
+      interval: 30s
+      timeout: 10s
+      retries: 40
+      start_period: 25m

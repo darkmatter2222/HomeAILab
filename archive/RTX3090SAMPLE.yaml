@@ -1,0 +1,431 @@
+services:
+  qwen3.8-27b-uncensored-dspark-3090:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda12
+    pull_policy: always
+
+    container_name: qwen3.8-27b-uncensored-dspark-3090
+    hostname: qwen3-8-27b-uncensored-dspark-3090
+
+    restart: unless-stopped
+    init: true
+    ipc: host
+    stop_grace_period: 2m
+
+    ports:
+      - "8006:8006"
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+
+      HF_TOKEN: "${HF_TOKEN:-}"
+
+      DOWNLOAD_LIMIT: "25M"
+
+      # RTX 3090 profile
+      TOTAL_CONTEXT: "131072"
+      PARALLEL_SLOTS: "1"
+
+      # DSpark
+      DSPARK_N_MAX: "4"
+
+    volumes:
+      - /home/darkmatter2222/models:/models
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack:
+        soft: 67108864
+        hard: 67108864
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "250m"
+        max-file: "8"
+
+    entrypoint:
+      - /bin/bash
+      - -lc
+
+    command:
+      - |
+        echo "BOOT: Qwen3.8 RTX 3090 + DSpark"
+        set -Eeuo pipefail
+
+        MODEL_DIR="/models/Qwen3.8-27B-Uncensored-GGUF"
+
+        TARGET_FILE="Qwen3.8-27B-Uncensored-Q4_K_M.gguf"
+        TARGET_PATH="$${MODEL_DIR}/$${TARGET_FILE}"
+        TARGET_PART="$${TARGET_PATH}.part"
+        TARGET_URL="https://huggingface.co/JonathanColetti/Qwen3.8-27B-Uncensored-GGUF/resolve/main/Qwen3.8-27B-Uncensored-Q4_K_M.gguf?download=true"
+
+        DSPARK_FILE="Qwen3.8-27B-DSpark-Q8_0.gguf"
+        DSPARK_PATH="$${MODEL_DIR}/$${DSPARK_FILE}"
+        DSPARK_PART="$${DSPARK_PATH}.part"
+        DSPARK_URL="https://huggingface.co/DimInfer/Qwen3.8-27B-Dspark-v1/resolve/main/Qwen3.8-27B-DSpark-Q8_0.gguf?download=true"
+
+        CHAT_TEMPLATE_PATH="$${MODEL_DIR}/qwen-fixed-chat-template-v22.jinja"
+        CHAT_TEMPLATE_URL="https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates/resolve/main/chat_template.jinja?download=true"
+
+        mkdir -p "$${MODEL_DIR}"
+
+        echo
+        echo "======================================================================"
+        echo " Qwen3.8-27B Uncensored Q4_K_M + DSpark"
+        echo " RTX 3090 — 24 GB"
+        echo "======================================================================"
+        echo "Container       : llama.cpp server-cuda12"
+        echo "Target model    : $${TARGET_PATH}"
+        echo "DSpark drafter  : $${DSPARK_PATH}"
+        echo "Total context   : $${TOTAL_CONTEXT}"
+        echo "Parallel slots  : $${PARALLEL_SLOTS}"
+        echo "Context / slot  : $$((TOTAL_CONTEXT / PARALLEL_SLOTS))"
+        echo "DSpark n_max    : $${DSPARK_N_MAX}"
+        echo "Target KV       : q4_0 / q4_0"
+        echo "Draft KV        : q4_0 / q4_0"
+        echo "Flash Attention : ON"
+        echo "Auto fit        : OFF"
+        echo "Download limit  : $${DOWNLOAD_LIMIT} (~25 MB/s)"
+        echo "======================================================================"
+        echo
+
+        ######################################################################
+        # GPU CHECK
+        ######################################################################
+
+        echo "Checking NVIDIA GPU access..."
+
+        if ! command -v nvidia-smi >/dev/null 2>&1; then
+          echo "ERROR: nvidia-smi is not available inside the container."
+          exit 40
+        fi
+
+        if ! nvidia-smi; then
+          echo "ERROR: NVIDIA GPU is not usable from this container."
+          exit 41
+        fi
+
+        echo
+        echo "Detected GPUs:"
+        nvidia-smi -L
+        echo
+
+        if ! nvidia-smi -L | grep -qiE "3090|GeForce RTX 3090"; then
+          echo "ERROR: RTX 3090 not detected."
+          nvidia-smi -L || true
+          exit 42
+        fi
+
+        echo "RTX 3090 detected successfully."
+        echo
+
+        ######################################################################
+        # LLAMA.CPP VERSION
+        ######################################################################
+
+        echo "llama.cpp build:"
+        /app/llama-server --version || true
+        echo
+
+        ######################################################################
+        # GGUF VALIDATION
+        ######################################################################
+
+        valid_gguf() {
+          local path="$$1"
+          [ -s "$${path}" ] || return 1
+
+          local magic
+          magic="$$(dd if="$${path}" bs=1 count=4 2>/dev/null || true)"
+
+          [ "$${magic}" = "GGUF" ]
+        }
+
+        ######################################################################
+        # DOWNLOAD FUNCTION
+        ######################################################################
+
+        download_gguf() {
+          local label="$$1"
+          local final_path="$$2"
+          local part_path="$$3"
+          local url="$$4"
+
+          echo
+          echo "----------------------------------------------------------------------"
+          echo "Checking: $${label}"
+          echo "----------------------------------------------------------------------"
+
+          if [ -f "$${final_path}" ]; then
+            if valid_gguf "$${final_path}"; then
+              echo "$${label} already present; download skipped."
+              ls -lh "$${final_path}"
+              return 0
+            fi
+
+            BAD_PATH="$${final_path}.invalid-$$(date +%Y%m%dT%H%M%S)"
+
+            echo "Existing file is invalid."
+            echo "Moving to:"
+            echo "$${BAD_PATH}"
+
+            mv "$${final_path}" "$${BAD_PATH}"
+          fi
+
+          echo
+          echo "$${label} is not present."
+          echo "Destination : $${final_path}"
+          echo "Partial     : $${part_path}"
+          echo "Bandwidth   : max $${DOWNLOAD_LIMIT}"
+          echo
+
+          CURL_ARGS=(
+            --location
+            --fail
+            --show-error
+            --progress-bar
+            --continue-at -
+            --limit-rate "$${DOWNLOAD_LIMIT}"
+            --connect-timeout 30
+            --retry 999
+            --retry-delay 5
+            --retry-max-time 0
+            --retry-all-errors
+            --speed-limit 1024
+            --speed-time 60
+            --output "$${part_path}"
+          )
+
+          if [ -n "$${HF_TOKEN:-}" ]; then
+            CURL_ARGS+=(
+              --header
+              "Authorization: Bearer $${HF_TOKEN}"
+            )
+          fi
+
+          curl "$${CURL_ARGS[@]}" "$${url}"
+
+          if ! valid_gguf "$${part_path}"; then
+            echo "ERROR: Download completed but GGUF validation failed."
+            exit 31
+          fi
+
+          mv -f "$${part_path}" "$${final_path}"
+          sync
+
+          echo
+          echo "$${label} download complete."
+          ls -lh "$${final_path}"
+        }
+
+        ######################################################################
+        # TARGET + DSPARK
+        ######################################################################
+
+        download_gguf \
+          "Qwen3.8-27B Uncensored Q4_K_M target" \
+          "$${TARGET_PATH}" \
+          "$${TARGET_PART}" \
+          "$${TARGET_URL}"
+
+        download_gguf \
+          "Qwen3.8-27B DSpark Q8_0 drafter" \
+          "$${DSPARK_PATH}" \
+          "$${DSPARK_PART}" \
+          "$${DSPARK_URL}"
+
+        if ! valid_gguf "$${TARGET_PATH}"; then
+          echo "ERROR: Target GGUF validation failed."
+          exit 32
+        fi
+
+        if ! valid_gguf "$${DSPARK_PATH}"; then
+          echo "ERROR: DSpark GGUF validation failed."
+          exit 33
+        fi
+
+        ######################################################################
+        # CHAT TEMPLATE
+        ######################################################################
+
+        valid_agent_template() {
+          local path="$$1"
+
+          [ -s "$${path}" ] || return 1
+
+          grep -Fq \
+            'qwen3.8-froggeric-v' \
+            "$${path}" \
+            || return 1
+
+          grep -Fq \
+            'message.role == "system" or message.role == "developer"' \
+            "$${path}" \
+            || return 1
+
+          if grep -Fq \
+            'System message must be at the beginning.' \
+            "$${path}"; then
+            return 1
+          fi
+
+          return 0
+        }
+
+        echo
+        echo "Preparing Qwen agent chat template..."
+
+        if valid_agent_template "$${CHAT_TEMPLATE_PATH}"; then
+          echo "Fixed Qwen chat template already present; download skipped."
+        else
+          rm -f "$${CHAT_TEMPLATE_PATH}.tmp"
+
+          TEMPLATE_ARGS=(
+            --location
+            --fail
+            --silent
+            --show-error
+            --connect-timeout 30
+            --retry 20
+            --retry-delay 3
+            --retry-all-errors
+            --limit-rate "$${DOWNLOAD_LIMIT}"
+            --output "$${CHAT_TEMPLATE_PATH}.tmp"
+          )
+
+          if [ -n "$${HF_TOKEN:-}" ]; then
+            TEMPLATE_ARGS+=(
+              --header
+              "Authorization: Bearer $${HF_TOKEN}"
+            )
+          fi
+
+          curl \
+            "$${TEMPLATE_ARGS[@]}" \
+            "$${CHAT_TEMPLATE_URL}"
+
+          if ! valid_agent_template "$${CHAT_TEMPLATE_PATH}.tmp"; then
+            echo "ERROR: Qwen agent template validation failed."
+            rm -f "$${CHAT_TEMPLATE_PATH}.tmp"
+            exit 34
+          fi
+
+          mv -f \
+            "$${CHAT_TEMPLATE_PATH}.tmp" \
+            "$${CHAT_TEMPLATE_PATH}"
+
+          sync
+        fi
+
+        ######################################################################
+        # DSPARK CHECK
+        ######################################################################
+
+        echo
+        echo "Checking llama.cpp DSpark support..."
+        echo
+
+        HELP_OUTPUT="$$(/app/llama-server --help 2>&1 || true)"
+
+        printf '%s\n' "$${HELP_OUTPUT}" \
+          | grep -E "spec-type|draft-dspark|model-draft|spec-draft-n-max" \
+          | head -n 40 \
+          || true
+
+        echo
+
+        if printf '%s\n' "$${HELP_OUTPUT}" | grep -q "draft-dspark"; then
+          echo "DSpark advertised by this llama.cpp build: YES"
+        else
+          echo "WARNING: 'draft-dspark' was not found literally in --help."
+          echo "The actual llama-server invocation will be allowed to determine support."
+        fi
+
+        ######################################################################
+        # FINAL GPU CHECK
+        ######################################################################
+
+        echo
+        echo "GPU immediately before model load:"
+        nvidia-smi
+        echo
+
+        ######################################################################
+        # START
+        ######################################################################
+
+        echo "======================================================================"
+        echo " STARTING LLAMA-SERVER"
+        echo "======================================================================"
+        echo "GPU            : RTX 3090"
+        echo "Target         : Qwen3.8-27B Uncensored Q4_K_M"
+        echo "Draft          : Qwen3.8-27B DSpark Q8_0"
+        echo "Spec type      : draft-dspark"
+        echo "DSpark n_max   : $${DSPARK_N_MAX}"
+        echo "Total context  : $${TOTAL_CONTEXT}"
+        echo "Parallel       : $${PARALLEL_SLOTS}"
+        echo "Context / slot : $$((TOTAL_CONTEXT / PARALLEL_SLOTS))"
+        echo "Target KV      : q4_0 / q4_0"
+        echo "Draft KV       : q4_0 / q4_0"
+        echo "Batch          : 1024"
+        echo "uBatch         : 256"
+        echo "Flash Attention: ON"
+        echo "Auto fit       : OFF"
+        echo "======================================================================"
+        echo
+
+        exec /app/llama-server \
+          --model "$${TARGET_PATH}" \
+          --model-draft "$${DSPARK_PATH}" \
+          --alias qwen3.8 \
+          --host 0.0.0.0 \
+          --port 8006 \
+          --fit off \
+          --n-gpu-layers all \
+          --n-gpu-layers-draft all \
+          --ctx-size "$${TOTAL_CONTEXT}" \
+          --parallel "$${PARALLEL_SLOTS}" \
+          --cache-type-k q4_0 \
+          --cache-type-v q4_0 \
+          --spec-draft-type-k q4_0 \
+          --spec-draft-type-v q4_0 \
+          --batch-size 1024 \
+          --ubatch-size 256 \
+          --flash-attn on \
+          --cont-batching \
+          --spec-type draft-dspark \
+          --spec-draft-n-max "$${DSPARK_N_MAX}" \
+          --no-mmproj \
+          --jinja \
+          --chat-template-file "$${CHAT_TEMPLATE_PATH}" \
+          --reasoning auto \
+          --reasoning-format deepseek \
+          --reasoning-preserve \
+          --metrics \
+          --perf \
+          --timeout 3600 \
+          --log-verbosity 3 \
+          --log-timestamps
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS --max-time 5 http://127.0.0.1:8006/health >/dev/null || exit 1
+
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 20m

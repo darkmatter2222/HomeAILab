@@ -1,0 +1,115 @@
+# ============================================================================
+# qwen38 GPU Router — dynamic priority ingress for the two Qwen3.8-27B backends
+#
+#   priority 1 : RedPCv2 RTX 5090  vLLM   192.168.86.37:8006   cap=MAX_SEQS(2)
+#   priority 2 : Databrick RTX 3090 llama host.docker.internal:8006 cap=1
+#
+# Policy: route 5090 first; when the 5090 is at live capacity spill to the 3090.
+#         Capacity is DISCOVERED live every PROBE_INTERVAL (vLLM /metrics
+#         running+waiting; llama /slots is_processing). 503 ONLY when both
+#         backends are at their live max.  Single API key = what Claude Code
+#         points at (x-api-key / Bearer / raw key).  Machine status at
+#         /router/status (used by the UI stack).
+#
+# Self-contained: python:3.11-slim, deps installed at startup (capped 25 MiB/s).
+# Deploy via Portainer (endpoint 3 / Databrick). Does NOT touch the 5090.
+# ============================================================================
+services:
+  qwen38-gpu-router:
+    image: python:3.11-slim
+    pull_policy: always
+    container_name: qwen38-gpu-router
+    hostname: qwen38-gpu-router
+    restart: unless-stopped
+    init: true
+    extra_hosts:
+      - host.docker.internal:host-gateway   # reach the 3090 (llama) on the host
+    ports:
+      - "8010:8010"
+    environment:
+      # ---- backends (edit + redeploy to change) ----
+      RED5090_URL: "http://192.168.86.37:8006"
+      RED5090_KIND: "vllm"
+      RED5090_CAP: "1"
+      RED3090_URL: "http://host.docker.internal:8006"
+      RED3090_KIND: "llama"
+      RED3090_CAP: "1"
+      PROBE_INTERVAL: "2"
+
+      # ---- auth: single key Claude Code uses (from .env: ROUTER_API_KEY) ----
+      ROUTER_API_KEY: "${ROUTER_API_KEY:?ROUTER_API_KEY not set (see .env)}"
+
+      # ---- DGX Spark (GB10) backend - Flash-Next ds4 SSD-PLE (Q6), /slots shim ----
+      # Reached over the LAN (no host-gateway needed). Priority 3 (after the 5090
+      # and 3090); the Spark is where heavy / high-concurrency load lands. The Spark
+      # now runs the ds4 SSD-PLE llama-style engine behind a /slots shim (3 slots,
+      # engine-managed concurrency) -> llama capacity probe via /slots.
+      SPARK_BACKEND_URL: "http://192.168.86.39:8006"
+      SPARK_KIND: "llama"
+      SPARK_CAPACITY: "3"
+      # ---- vision pinning ----
+      # Image requests (a base64/URL image block in the payload) are force-routed
+      # to this backend (the DGX Spark, which embeds the Qwen vision tower) and
+      # never spill to a text-only 5090/3090 slot. Empty = disable detection.
+      VISION_BACKEND: "dgxsparx"
+
+      # ---- tuning ----
+      SESSION_TTL_SECONDS: "1800"
+      CONNECT_TIMEOUT_SECONDS: "5"
+      BACKEND_PROBE_TIMEOUT: "2"
+      MAX_REQUEST_SECONDS: "43200"
+      # DEBUG logs every routing decision (which backend was eligible, why a
+      # vision pin fell through, health up/down transitions, per-request entry).
+      # Set back to INFO in steady state once debugging is done.
+      LOG_LEVEL: "DEBUG"
+      # in-memory ring of the last N log lines, served at GET /router/logs?lines=N
+      LOG_RING_MAX: "4000"
+      # 25 MiB/s cap for the pip install at startup (bytes/sec)
+      PIP_DL_BPS: "26214400"
+
+    logging:
+      driver: json-file
+      options:
+        # rolling: keep the last 5 x 50 MiB on disk (~250 MiB total) in addition
+        # to the in-memory /router/logs ring. `docker logs` reads these files.
+        max-size: "50m"
+        max-file: "5"
+
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -Eeuo pipefail
+        # cap pip downloads at 25 MiB/s on first run (cached after)
+        if [ ! -d /root/.cache/pip ]; then
+          mkdir -p /root/.cache/pip
+          export PIP_CACHE_DIR=/root/.cache/pip
+        fi
+        echo "installing deps (capped $${PIP_DL_BPS} B/s)..."
+        python -m pip install --quiet --no-cache-dir --progress-bar off \
+          --index-url https://pypi.org/simple \
+          "fastapi>=0.110" "uvicorn[standard]>=0.30" "httpx>=0.27" || \
+          { echo "pip install failed (network?)"; exit 43; }
+
+        # drop the router source in (baked into the image at build time by
+        # the Portainer "build" step is not available for standalone string
+        # stacks, so we fetch it from a bind-mounted path instead).
+        SRC=/opt/router/router.py
+        if [ -n "$${ROUTER_SRC:-}" ] && [ -f "$${ROUTER_SRC}" ]; then
+          cp "$${ROUTER_SRC}" "$${SRC}"
+          echo "router source: $${ROUTER_SRC} -> $${SRC}"
+        fi
+
+        echo "starting router on :8010 (api key set: $${ROUTER_API_KEY:+yes})"
+        exec python -m uvicorn router:app --app-dir /opt/router --host 0.0.0.0 --port 8010
+
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8010/health',timeout=4).status==200 else 1)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 20m
+
+    # keep the router source beside the service so ops can edit in Portainer UI
+    # and redeploy; the container copies it in at startup.
+    volumes:
+      - /home/darkmatter2222/qwen38-router/router.py:/opt/router/router.py:ro

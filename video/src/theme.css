@@ -1,0 +1,174 @@
+/* ═══════════════════════════════════════════════════════════════════
+   THE MODEL QUESTION — continuous spatial canvas
+   Matte black environment, charcoal surfaces, NVIDIA electric green,
+   white typography, thin architectural lines, restrained glow.
+   Green means: active computation, selection, success, data moving,
+   important numbers, current focus. Everything else stays
+   black / graphite / gray / white.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* palette — precision engineering + cinematic visualization */
+  --bg: #050609;          /* matte black ground */
+  --bg-2: #0b0e14;        /* charcoal */
+  --panel: rgba(18, 21, 28, 0.88);  /* graphite surface */
+  --panel-line: rgba(255, 255, 255, 0.10);
+  --green: #76b900;       /* NVIDIA electric green — used sparingly */
+  --green-bright: #91c733;
+  --green-dim: #4c7a06;
+  --green-glow: rgba(118, 185, 0, 0.45);
+  /* premium slow-out easings */
+  --ease-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-soft:  cubic-bezier(0.33, 1, 0.68, 1);
+  --ink: #e9edf3;
+  --ink-dim: #98a1b3;
+  --ink-faint: #5c657a;
+  --danger: #ff5470;
+  --amber: #ffb24d;
+  --cyan: #4dc3ff;
+  --mono: "JetBrains Mono", "Cascadia Code", "Consolas", "SF Mono", monospace;
+  --sans: "Inter", "Inter var", "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono { font-family: var(--mono); }
+
+.scene-root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* matte black with a faint volumetric depth, no colored washes */
+  background:
+    radial-gradient(1100px 640px at 50% 30%, rgba(255, 255, 255, 0.035), transparent 62%),
+    radial-gradient(900px 560px at 78% 88%, rgba(118, 185, 0, 0.045), transparent 60%),
+    var(--bg);
+}
+
+/* each chapter fills the window; the caption owns the bottom strip */
+.scene-clip {
+  padding: 30px 2.5vw 172px;
+}
+
+/* persistent progress hairline */
+.progress-hairline {
+  position: fixed;
+  left: 0; bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  z-index: 60;
+}
+.progress-hairline > div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green-dim), var(--green));
+  box-shadow: 0 0 14px var(--green-glow);
+}
+
+/* corner HUD frame — thin architectural lines, restrained */
+.hud {
+  position: fixed;
+  inset: 18px;
+  pointer-events: none;
+  z-index: 50;
+}
+.hud .corner {
+  position: absolute;
+  width: 24px; height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+.hud .corner.tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.hud .corner.tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.hud .corner.bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.hud .corner.br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+
+.scene-label {
+  position: fixed;
+  top: 32px;
+  left: 44px;
+  z-index: 55;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.scene-label .tick {
+  width: 8px; height: 8px;
+  background: var(--green);
+  box-shadow: 0 0 10px var(--green-glow);
+}
+.scene-label .t {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.16em;
+  color: var(--ink-faint);
+}
+.scene-label .t b { color: var(--green-bright); font-weight: 600; }
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(118, 185, 0, 0.0); }
+  50% { box-shadow: 0 0 20px 2px rgba(118, 185, 0, 0.3); }
+}
+.pulse { animation: pulseGlow 2.8s ease-in-out infinite; }
+
+/* data-card used across chapters */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+}
+.card .hd {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--panel-line);
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+}
+.card .hd .dim { color: var(--ink-faint); letter-spacing: 0.08em; }
+.card .bd { padding: 14px; }
+
+.kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px 16px;
+  font-family: var(--mono);
+  font-size: 13.5px;
+}
+.kv .k { color: var(--ink-faint); }
+.kv .v { color: var(--ink); text-align: right; }
+.kv .v.g { color: var(--green-bright); }
+.kv .v.d { color: var(--ink-dim); }
+
+.big-stat .num {
+  font-family: var(--mono);
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--green-bright);
+  text-shadow: 0 0 30px rgba(118, 185, 0, 0.35);
+  line-height: 1;
+}
+.big-stat .unit {
+  font-family: var(--mono);
+  font-size: 15px;
+  color: var(--ink-dim);
+  margin-top: 8px;
+  letter-spacing: 0.12em;
+}

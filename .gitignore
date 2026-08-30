@@ -1,0 +1,59 @@
+# ============================================================================
+# modeloptimizer — gitignore
+# ============================================================================
+
+# Secrets — never commit (the single source of real values)
+.env
+.env.*
+!.env.example
+
+# Personal launcher bat — copy from .example
+copilot-dgx.bat
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+# Windows console redirect artifacts
+nul
+*.nul
+
+# Local dashboard twins (byte-identical to the committed .json)
+*.local.json
+
+# Temp / scratch
+tmp_hf/
+scratchpad/
+test_image.png
+test_image2.png
+*.tmp
+
+# Logs
+*.log
+[Ll]ogs/
+
+# Python compiled / cache
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Go build artifacts
+router/bin/
+router/llm-router
+*.exe
+*.test
+
+# Node (video/ + video/qwen-fleet/ + anywhere). node_modules/ and dist/ already
+# cover the nested video/qwen-fleet project's build artifacts; its source is kept.
+node_modules/
+dist/
+video/verify/
+
+# Jupyter / notebook
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp

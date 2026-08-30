@@ -1,0 +1,137 @@
+# ============================================================================
+# qwen38 Router Status — minimal live-traffic dashboard (v1, robust)
+#
+# Served on :8091 behind HTTP basic auth (username + password, from .env):
+#   username : fleet        (UI_STATUS_USER in .env)
+#   password : <from .env>  (UI_STATUS_PASS in .env)
+#
+# This is the robust variant: it uses classic HTTP/1.1 basic auth (the browser
+# attaches "Authorization: Basic <u:p>" to every request, including the 2 s
+# status polls) — NO token issuance, NO POST. The page shows all 3 live
+# devices (5090 vLLM, 3090 llama, DGX Spark llama), per-device capacity /
+# busy / in-flight, a 30 s request-throughput chart, and a newest-activity
+# feed. Self-contained: python:3.11-slim + bind-mounted router-status.html
+# + an inline stdlib HTTP server (no pip deps -> nothing to download).
+#
+# Reads ONLY the router's open /router/status, so traffic keeps flowing on
+# the router (:8010) while this is (re)deployed.
+# Deploy via Portainer (endpoint 3 / Databrick).
+# ============================================================================
+services:
+  qwen38-router-status:
+    image: python:3.11-slim
+    pull_policy: always
+    container_name: qwen38-router-status
+    hostname: qwen38-router-status
+    restart: unless-stopped
+    init: true
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "8091:8091"
+    environment:
+      # From .env: UI_STATUS_USER / UI_STATUS_PASS (real values, gitignored)
+      UI_USER: "${UI_STATUS_USER:-fleet}"
+      UI_PASS: "${UI_STATUS_PASS:?UI_STATUS_PASS not set (see .env)}"
+      ROUTER_HOST: "host.docker.internal"
+      ROUTER_PORT: "8010"
+      UI_PORT: "8091"
+
+    volumes:
+      - /home/darkmatter2222/qwen38-router/router-status.html:/opt/ui/ui.html:ro
+
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -Eeuo pipefail
+        echo "router-status: user=$${UI_USER}  router=$${ROUTER_HOST}:$${ROUTER_PORT}  port=$${UI_PORT}"
+        exec python - <<'PYEOF'
+        import base64, http.server, os, socketserver, sys, urllib.request
+
+        USER = os.environ.get("UI_USER", "fleet")
+        PASS = os.environ.get("UI_PASS", "")
+        ROUTER = os.environ.get("ROUTER_HOST", "host.docker.internal")
+        RPORT  = os.environ.get("ROUTER_PORT", "8010")
+        PORT   = int(os.environ.get("UI_PORT", "8091"))
+        UIFILE = "/opt/ui/ui.html"
+
+        # expected "Authorization" value for basic auth (u:p)
+        EXPECTED = "Basic " + base64.b64encode(f"{USER}:{PASS}".encode()).decode()
+
+        def _send(self, code, body, ctype="text/html; charset=utf-8"):
+            if isinstance(body, str):
+                body = body.encode("utf-8")
+            # drain any unread request body (peer is HTTP/1.1; we send
+            # Connection: close, but undrained bytes would leak into the
+            # next read on the socket)
+            try:
+                remaining = int(self.headers.get("Content-Length", 0) or 0)
+                if remaining > 0:
+                    self.rfile.read(remaining)
+            except Exception:
+                pass
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            try:
+                self.wfile.write(body)
+                self.wfile.flush()
+            except BrokenPipeError:
+                pass
+
+        class H(http.server.BaseHTTPRequestHandler):
+            server_version = "qwen38-status/1.0"
+            protocol_version = "HTTP/1.1"
+
+            def log_message(self, *a):
+                pass
+
+            _send = _send
+
+            def _authed(self):
+                return self.headers.get("Authorization", "") == EXPECTED
+
+            def do_GET(self):
+                p = self.path.split("?")[0]
+                if p in ("/router/status", "/router/health"):
+                    # proxy so the browser keeps only the basic-auth pair
+                    if not self._authed():
+                        self._send(401, "no session", "text/plain")
+                        return
+                    try:
+                        with urllib.request.urlopen(f"http://{ROUTER}:{RPORT}{p}", timeout=8) as r:
+                            data = r.read()
+                        self._send(200, data, "application/json")
+                    except Exception as e:
+                        self._send(502, f"router unreachable: {e}".encode(), "text/plain")
+                    return
+                if p in ("/", "/index.html", "/ui.html"):
+                    if not self._authed():
+                        self.send_response(401)
+                        self.send_header("WWW-Authenticate", 'Basic realm="qwen38-router-status"')
+                        self.send_header("Content-Length", "0")
+                        self.send_header("Connection", "close")
+                        self.end_headers()
+                        return
+                    with open(UIFILE, "rb") as f:
+                        self._send(200, f.read())
+                    return
+                self._send(404, "not found", "text/plain")
+
+        class S(socketserver.ThreadingMixIn, http.server.HTTPServer):
+            daemon_threads = True
+            request_queue_size = 64
+
+        with S(("0.0.0.0", PORT), H) as srv:
+            print(f"router-status serving on :{PORT} (basic auth {USER})", flush=True)
+            srv.serve_forever()
+        PYEOF
+
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8091/',timeout=6); sys.exit(0 if r.status in (200,401) else 1)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 5m

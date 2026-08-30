@@ -1,0 +1,170 @@
+# ============================================================================
+# Qwen3.8-Flash-Next (180B MoE, 6B active + 51B n-gram embed + MTP)
+# DGX Spark (GB10 / Blackwell) - Blackwell-native path, vLLM arm64/CU13
+#
+#   Engine   : vLLM vllm-arm64-cu13-0.25.1 (GB10 aarch64 build, CACHED on the
+#              Spark - no image download). transformers 5.14.1 in the image
+#              >= the 5.8.0.dev0 the Flash-Next config declares.
+#   Model    : Qwen/Qwen3.8-Flash-Next-FP8 (Qwen-official fine-grained FP8,
+#              block-128, "nearly identical to the original"; ~186 GB, fits the
+#              122 GiB unified memory). Downloaded throttled 25 MiB/s to
+#              /home/darkmatter2222/models/Qwen3.8-Flash-Next-FP8.
+#
+#   Why FP8 (not NVFP4 / GGUF):
+#     - The GB10's dedicated NVFP4 tensor cores are the *fastest* Blackwell
+#       path, but the only NVFP4 build (RadixArk/Qwen3.8-Flash-Next-NVFP4,
+#       135 GB, ModelOpt) is SGLang-only (validated on GB300/B300) and there
+#       is no cached SGLang GB10 image - so it is the upgrade path once an
+#       arm64 SGLang build is confirmed.
+#     - The GGUF path (unsloth UD-Q4_K_XL, 111 GB) needs llama.cpp PR #27742
+#       (qwen4exp arch support) which is still DRAFT - not on a release tag.
+#     - FP8 is the official Qwen quant with vLLM in the README compatibility
+#       line ("compatible with vLLM, SGLang..."), and vLLM is what we already
+#       run on this box (same image as the 27B NVFP4 stack).
+#
+#   Tuning goals (user request):
+#     - FAST: FP8 weights (no dequant penalty), GB10 FP8 tensor cores,
+#             --async-scheduling, chunked prefill, prefix cache.
+#     - CONCURRENT: 3 streams (--max-num-seqs 3). Full-262K KV is only
+#             allocated on demand (the full pool is far larger than 3x262K),
+#             so each stream keeps its full context.
+#     - NO THINKING: --default-chat-template-kwargs {"enable_thinking":false}
+#       (the template only renders reasoning when enable_thinking is
+#       undefined-or-true; an explicit false turns it off).
+#     - FULL CONTEXT: --max-model-len 262144 (native).
+#
+#   MTP spec decode is OFF at first (SPEC_DECODE=off): the Flash-Next MTP
+#   config is a new shape (hybrid:true, layer_types:["full_attention"]) the
+#   0.25.1 speculative machinery may not know; enable it after a clean load
+#   and an A/B (the 27B stack showed MTP = ~1.5x single-stream when it works).
+# ============================================================================
+services:
+  qwen3.8-flashnext-dgxsparx:
+    # GB10 (aarch64/Blackwell) vLLM build - already cached on the Spark.
+    image: vllm/vllm-openai:vllm-arm64-cu13-0.25.1-7a33ba9
+    container_name: qwen3.8-flashnext-dgxsparx
+    hostname: qwen3.8-flashnext-dgxsparx
+    restart: unless-stopped
+    init: true
+    ipc: host
+    stop_grace_period: 2m
+
+    ports:
+      - "8006:8006"
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      HF_TOKEN: "${HF_TOKEN:-}"
+
+      # Model is local; point vLLM straight at it (offline after first load).
+      MODEL_DIR: "/models/Qwen3.8-Flash-Next-FP8"
+      HF_HOME: "/models/.cache/huggingface"
+      HUGGINGFACE_HUB_CACHE: "/models/.cache/huggingface/hub"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+      VLLM_USE_FLASHINFER_SAMPLER: "1"
+
+      # 25 MiB/s cap (bytes/sec) - only used if the model must be fetched.
+      DOWNLOAD_LIMIT_BPS: "26214400"
+
+      # ---- Tunable knobs (edit + redeploy to re-test) ----
+      # Concurrency = 3 (user request: 3 concurrent streams).
+      MAX_NUM_SEQS: "3"
+      MAX_MODEL_LEN: "262144"       # native full context
+      MAX_NUM_BATCHED_TOKENS: "8192"
+      KV_CACHE_DTYPE: "fp8"
+      KV_CACHE_MEMORY_BYTES: "0"    # 0 = auto (use most of the 122 GiB)
+      # The GB10 runs a desktop (Xorg/gnome hold ~12 GiB), so vLLM's default
+      # 0.92 OOMs. 0.85 leaves headroom for weights + fp8 KV + OS.
+      GPU_MEM_UTIL: "0.85"
+      FLASH_ATTN_BACKEND: "FLASHINFER"
+      ENABLE_THINKING: "false"
+      # spec decode: the Flash-Next MTP is a new hybrid shape; off until the
+      # 0.25.1 speculative machinery is confirmed to handle it.
+      SPEC_DECODE: "off"
+
+    volumes:
+      - /home/darkmatter2222/models:/models
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      stack:   { soft: 67108864, hard: 67108864 }
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "250m"
+        max-file: "8"
+
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -Eeuo pipefail
+
+        echo
+        echo "======================================================================"
+        echo " Qwen3.8-Flash-Next (180B MoE) - DGX Spark (GB10 / Blackwell)"
+        echo " vLLM arm64/CU13 - FP8 - fp8 KV - $${MAX_NUM_SEQS} streams"
+        echo "======================================================================"
+        echo " Model dir    : $${MODEL_DIR}"
+        echo " max-model-len: $${MAX_MODEL_LEN}   max-num-seqs: $${MAX_NUM_SEQS}"
+        echo " KV           : $${KV_CACHE_DTYPE} ($${KV_CACHE_MEMORY_BYTES} bytes, 0=auto)"
+        echo " Attn         : $${FLASH_ATTN_BACKEND}   thinking: $${ENABLE_THINKING}"
+        echo " Spec decode  : $${SPEC_DECODE}"
+        echo "======================================================================"
+        echo
+
+        # Validate the local model is complete (steady-state needs nothing to fetch)
+        [ -f "$${MODEL_DIR}/model-00001-of-00131.safetensors" ] || { echo "ERROR: first FP8 shard missing in $${MODEL_DIR}"; exit 41; }
+        [ -f "$${MODEL_DIR}/model.safetensors.index.json" ] || { echo "ERROR: index missing"; exit 42; }
+
+        # JSON config flags written to a file to keep the quotes clean.
+        echo "{\"enable_thinking\":$${ENABLE_THINKING}}" > /tmp/ctk.json
+        [ "$${SPEC_DECODE}" != "off" ] && echo "{\"method\":\"mtp\",\"num_speculative_tokens\":3}" > /tmp/spec.json
+
+        # vLLM flag array (bash arrays keep each flag a distinct argument).
+        # (Every shell $ is doubled for Portainer compose interpolation.)
+        ARGS=(
+          "$${MODEL_DIR}"
+          --served-model-name qwen3.8
+          --host 0.0.0.0 --port 8006
+          --language-model-only
+          --max-model-len "$${MAX_MODEL_LEN}"
+          --max-num-seqs "$${MAX_NUM_SEQS}"
+          --max-num-batched-tokens "$${MAX_NUM_BATCHED_TOKENS}"
+          --kv-cache-dtype "$${KV_CACHE_DTYPE}"
+          --gpu-memory-utilization "$${GPU_MEM_UTIL}"
+          --attention-backend "$${FLASH_ATTN_BACKEND}"
+          --enable-chunked-prefill --async-scheduling --enable-prefix-caching
+          --trust-remote-code
+          --default-chat-template-kwargs "$(cat /tmp/ctk.json)"
+          --reasoning-parser qwen3
+          --enable-auto-tool-choice --tool-call-parser qwen3_coder
+        )
+        [ "$${KV_CACHE_MEMORY_BYTES}" != "0" ] && ARGS+=( --kv-cache-memory-bytes "$${KV_CACHE_MEMORY_BYTES}" )
+        if [ "$${SPEC_DECODE}" != "off" ]; then
+          ARGS+=( --speculative-config "$(cat /tmp/spec.json)" )
+          echo "Spec decode (MTP) enabled."
+        fi
+
+        echo "Executing:"; printf ' %q' vllm serve "$${ARGS[@]}"; echo; echo
+        exec vllm serve "$${ARGS[@]}"
+
+    healthcheck:
+      test: [ "CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8006/health',timeout=5).read()\"" ]
+      interval: 30s
+      timeout: 10s
+      retries: 60
+      start_period: 30m

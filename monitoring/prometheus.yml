@@ -1,0 +1,79 @@
+# ============================================================================
+# Prometheus scrape config — Qwen3.8 GPU fleet (runs on the DGX Spark)
+# ----------------------------------------------------------------------------
+# Canonical copy lives on the DGX Spark at
+#   /home/darkmatter2222/vllm-monitoring/prometheus.yml
+# (bind-mounted read-only into the `prometheus` Portainer stack, id 12, ep 4).
+# This file is the version-controlled mirror. Edit here, copy to the host,
+# then reload via `curl -X POST http://<spark>:9090/-/reload` (web-lifecycle
+# is enabled on the container) — no restart needed.
+#
+# Fleet map (see .env / CLAUDE.md):
+#   DGX Spark  192.168.86.39  GB10  — vLLM (host.docker.internal:8006) + dcgm + node
+#   RedPCv2    192.168.86.37  RTX 5090 — vLLM (was mislabeled "llamacpp")
+#   Databrick  192.168.86.48  RTX 3090 — llama.cpp (8006)
+#   Router     192.168.86.48  :8010 — qwen38-gpu-router (/router/metrics)
+# ============================================================================
+
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  # DGX Spark vLLM. NOTE: 8006 is currently fronted by the flashnext `ds4` shim
+  # (qwen38-flashnext-dgxsparx); when the native vLLM (`qwen38` stack 14) is
+  # serving 8006 instead, vllm:* / http_* series appear here. Keep the job so
+  # both engines are covered.
+  - job_name: "vllm-dgxspark"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8006"]
+        labels:
+          device: "DGX Spark"
+          runtime: "vllm"
+          backend: "vllm-qwen38"
+
+  # RTX 5090 — vLLM (was mislabeled "llamacpp-5090" / runtime=llamacpp even
+  # though RedPCv2 runs vllm/vllm-openai:v0.27.1). Renamed for accuracy.
+  - job_name: "vllm-5090"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["192.168.86.37:8006"]
+        labels:
+          device: "RTX 5090"
+          runtime: "vllm"
+          backend: "vllm-5090"
+
+  # RTX 3090 — llama.cpp.
+  - job_name: "llamacpp-3090"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["192.168.86.48:8006"]
+        labels:
+          device: "RTX 3090"
+          runtime: "llamacpp"
+          backend: "llamacpp-3090"
+
+  # Host-level metrics. Spark node_exporter (arm64, confirmed on the Spark
+  # itself) + DCGM GPU-hardware exporter on the same host.
+  - job_name: "node"
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+        labels:
+          device: "DGX Spark"
+
+  - job_name: "dcgm"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:9400"]
+        labels:
+          device: "DGX Spark"
+
+  # The router exposes FastAPI http_requests_total + custom gauges.
+  - job_name: "qwen38-router"
+    metrics_path: /router/metrics
+    static_configs:
+      - targets: ["192.168.86.48:8010"]
+        labels:
+          device: "Router"
+          runtime: "fastapi"
+          backend: "qwen38-gpu-router"

@@ -1,0 +1,347 @@
+{
+  "dashboard": {
+    "title": "Qwen3.8 GPU Fleet v2 — Multi-Device Throughput + Latency",
+    "uid": "qwen38-fleet-v2",
+    "schemaVersion": 42,
+    "version": 1,
+    "editable": true,
+    "time": { "from": "now-6h", "to": "now" },
+    "timezone": "browser",
+    "refresh": "5s",
+    "graphTooltip": 1,
+    "tags": ["qwen3.8", "fleet", "v2"],
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1, "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+          "enable": true, "hide": true, "iconColor": "#76B900",
+          "name": "Annotations & Alerts", "type": "dashboard"
+        }
+      ]
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "device", "label": "Device", "type": "query",
+          "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+          "query": "label_values(up, device)",
+          "refresh": 1, "regex": "", "allValue": "", "multi": true,
+          "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
+          "options": [], "sort": 1, "queryValue": ""
+        },
+        {
+          "name": "model", "label": "Model", "type": "query",
+          "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+          "query": "label_values(vllm:num_requests_running, model_name)",
+          "refresh": 1, "regex": "", "allValue": "", "multi": true,
+          "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
+          "options": [], "sort": 1, "queryValue": ""
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1001, "type": "stat", "title": "OUTPUT TOK/S (SELECTED)",
+        "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": { "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#76B900" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "#76B900", "value": 0 } ] },
+          "unit": "tps", "noValue": "—"
+        }, "overrides": [] },
+        "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value" },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "expr": "sum(rate(vllm:generation_tokens_total{device=~\"$device\", model_name=~\"$model\"}[$__rate_interval])) + sum(rate(llamacpp:n_decode_total{device=~\"$device\"}[$__rate_interval]))" }
+        ]
+      },
+      {
+        "id": 1002, "type": "stat", "title": "FLEET OUTPUT TOK/S (ALL DEVICES)",
+        "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": { "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#A4D65E" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "#A4D65E", "value": 0 } ] },
+          "unit": "tps", "noValue": "—"
+        }, "overrides": [] },
+        "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value" },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "expr": "sum(rate(vllm:generation_tokens_total[$__rate_interval])) + sum(rate(llamacpp:n_decode_total[$__rate_interval]))" }
+        ]
+      },
+      {
+        "id": 1003, "type": "stat", "title": "TTFT P95 (SELECTED)",
+        "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": { "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#FFC556" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "#FFC556", "value": 0 } ] },
+          "unit": "s", "noValue": "—"
+        }, "overrides": [] },
+        "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value" },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "expr": "max(histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket{device=~\"$device\", model_name=~\"$model\"}[$__rate_interval]))))" }
+        ]
+      },
+      {
+        "id": 1004, "type": "stat", "title": "FLEET UPTIME (LAST 1H)",
+        "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": { "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#A4D65E" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": 0 },
+            { "color": "#FFC556", "value": 95 },
+            { "color": "#A4D65E", "value": 99 } ] },
+          "unit": "percent", "noValue": "—"
+        }, "overrides": [] },
+        "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value" },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "expr": "100 * (count(up{job=~\"vllm-dgxspark|llamacpp-5090|llamacpp-3090\"} == 1) / count(up{job=~\"vllm-dgxspark|llamacpp-5090|llamacpp-3090\"}))" }
+        ]
+      },
+      {
+        "id": 1005, "type": "stat", "title": "CPU UTIL (SPARK)",
+        "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": { "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#F2E9B0" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "#76B900", "value": 0 },
+            { "color": "#FFC556", "value": 70 },
+            { "color": "red", "value": 90 } ] },
+          "unit": "percent", "noValue": "—"
+        }, "overrides": [] },
+        "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value" },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])))" }
+        ]
+      },
+      {
+        "id": 1006, "type": "stat", "title": "MEM AVAILABLE (SPARK)",
+        "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": { "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "#B4C7E0" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "#B4C7E0", "value": 0 } ] },
+          "unit": "bytes", "noValue": "—"
+        }, "overrides": [] },
+        "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value" },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "expr": "node_memory_MemAvailable_bytes" }
+        ]
+      },
+      {
+        "id": 2001, "type": "timeseries", "title": "OUTPUT TOK/S BY DEVICE",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "#76B900" },
+            "custom": {
+              "drawStyle": "line", "fillOpacity": 8, "gradientMode": "opacity",
+              "lineInterpolation": "smooth", "lineWidth": 2, "pointSize": 4,
+              "showPoints": "never", "spanNulls": true,
+              "stacking": { "group": "A", "mode": "none" },
+              "axisPlacement": "auto"
+            },
+            "thresholds": { "mode": "absolute", "steps": [ { "color": "#76B900", "value": 0 } ] },
+            "unit": "tps", "noValue": "—"
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": { "calcs": ["lastNotNull","mean","max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+          "tooltip": { "hideZeros": false, "mode": "multi", "sort": "desc" },
+          "annotations": { "clustering": -1, "multiLane": false }
+        },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "legendFormat": "Spark vLLM", "expr": "sum by (device) (rate(vllm:generation_tokens_total{job=\"vllm-dgxspark\"}[$__rate_interval]))" },
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "B",
+            "legendFormat": "5090 vLLM", "expr": "sum by (device) (rate(vllm:generation_tokens_total{job=\"llamacpp-5090\"}[$__rate_interval]))" },
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "C",
+            "legendFormat": "3090 llama", "expr": "sum by (device) (rate(llamacpp:n_decode_total{job=\"llamacpp-3090\"}[$__rate_interval]))" }
+        ]
+      },
+      {
+        "id": 2002, "type": "timeseries", "title": "TTFT P50 / P95 BY DEVICE",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "#FFC556" },
+            "custom": { "drawStyle": "line", "fillOpacity": 5, "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never" },
+            "thresholds": { "mode": "absolute", "steps": [ { "color": "#FFC556", "value": 0 } ] },
+            "unit": "s", "noValue": "—"
+          },
+          "overrides": [
+            { "matcher": { "id": "byName", "options": "Spark p95" }, "properties": [ { "id": "color", "value": { "fixedColor": "#FFC556", "mode": "fixed" } } ] },
+            { "matcher": { "id": "byName", "options": "5090 p95" }, "properties": [ { "id": "color", "value": { "fixedColor": "#F2E9B0", "mode": "fixed" } } ] }
+          ]
+        },
+        "options": {
+          "legend": { "calcs": ["lastNotNull","mean"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+          "tooltip": { "hideZeros": false, "mode": "multi", "sort": "desc" }
+        },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "legendFormat": "Spark p95", "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket{job=\"vllm-dgxspark\"}[$__rate_interval])))" },
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "B",
+            "legendFormat": "5090 p95", "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket{job=\"llamacpp-5090\"}[$__rate_interval])))" }
+        ]
+      },
+      {
+        "id": 2003, "type": "timeseries", "title": "PROMPT vs OUTPUT TOK MIX (SELECTED DEVICE)",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "#A4D65E" },
+            "custom": { "drawStyle": "line", "fillOpacity": 8, "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never" },
+            "thresholds": { "mode": "absolute", "steps": [ { "color": "#A4D65E", "value": 0 } ] },
+            "unit": "tps", "noValue": "—"
+          }, "overrides": []
+        },
+        "options": {
+          "legend": { "calcs": ["lastNotNull","mean"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+          "tooltip": { "hideZeros": false, "mode": "multi" }
+        },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "legendFormat": "output t/s ({{device}})", "expr": "sum by (device) (rate(vllm:generation_tokens_total{device=~\"$device\", model_name=~\"$model\"}[$__rate_interval]))" },
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "B",
+            "legendFormat": "prompt t/s ({{device}})", "expr": "sum by (device) (rate(vllm:prompt_tokens_total{device=~\"$device\", model_name=~\"$model\"}[$__rate_interval]))" }
+        ]
+      },
+      {
+        "id": 2004, "type": "timeseries", "title": "E2E REQUEST LATENCY P50/P95/P99 (SELECTED)",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "#F2E9B0" },
+            "custom": { "drawStyle": "line", "fillOpacity": 5, "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never" },
+            "thresholds": { "mode": "absolute", "steps": [ { "color": "#F2E9B0", "value": 0 } ] },
+            "unit": "s", "noValue": "—"
+          }, "overrides": []
+        },
+        "options": {
+          "legend": { "calcs": ["lastNotNull","mean"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+          "tooltip": { "hideZeros": false, "mode": "multi" }
+        },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "legendFormat": "p50 ({{device}})", "expr": "histogram_quantile(0.5, sum by (device, le) (rate(vllm:e2e_request_latency_seconds_bucket{device=~\"$device\"}[$__rate_interval])))" },
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "B",
+            "legendFormat": "p95 ({{device}})", "expr": "histogram_quantile(0.95, sum by (device, le) (rate(vllm:e2e_request_latency_seconds_bucket{device=~\"$device\"}[$__rate_interval])))" },
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "C",
+            "legendFormat": "p99 ({{device}})", "expr": "histogram_quantile(0.99, sum by (device, le) (rate(vllm:e2e_request_latency_seconds_bucket{device=~\"$device\"}[$__rate_interval])))" }
+        ]
+      },
+      {
+        "id": 3001, "type": "bargauge", "title": "MODEL THROUGHPUT COMPARISON",
+        "gridPos": { "h": 8, "w": 8, "x": 0, "y": 20 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "#76B900" },
+            "max": 100, "min": 0, "unit": "tps", "noValue": "—"
+          }, "overrides": []
+        },
+        "options": { "displayMode": "gradient", "orientation": "auto" },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "legendFormat": "{{model_name}}", "expr": "sum by (model_name) (rate(vllm:generation_tokens_total[$__rate_interval]))" }
+        ]
+      },
+      {
+        "id": 3002, "type": "bargauge", "title": "MODEL TTFT P95 COMPARISON",
+        "gridPos": { "h": 8, "w": 8, "x": 8, "y": 20 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "#FFC556" },
+            "unit": "s", "noValue": "—"
+          }, "overrides": []
+        },
+        "options": { "displayMode": "gradient", "orientation": "auto" },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "legendFormat": "{{model_name}}", "expr": "max by (model_name) (histogram_quantile(0.95, sum by (model_name, le) (rate(vllm:time_to_first_token_seconds_bucket[$__rate_interval]))))" }
+        ]
+      },
+      {
+        "id": 3003, "type": "bargauge", "title": "MODEL QUEUE PRESSURE",
+        "gridPos": { "h": 8, "w": 8, "x": 16, "y": 20 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "#F2E9B0" },
+            "unit": "short", "noValue": "—"
+          }, "overrides": []
+        },
+        "options": { "displayMode": "gradient", "orientation": "auto" },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "legendFormat": "{{model_name}}", "expr": "sum by (model_name) (vllm:num_requests_waiting)" }
+        ]
+      },
+      {
+        "id": 4001, "type": "timeseries", "title": "SPARK CPU / MEMORY / DISK",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "#A4D65E" },
+            "custom": { "drawStyle": "line", "fillOpacity": 5, "lineInterpolation": "smooth", "lineWidth": 1, "showPoints": "never" },
+            "thresholds": { "mode": "absolute", "steps": [ { "color": "#A4D65E", "value": 0 } ] },
+            "unit": "short", "noValue": "—"
+          }, "overrides": []
+        },
+        "options": {
+          "legend": { "calcs": ["lastNotNull","mean"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+          "tooltip": { "hideZeros": false, "mode": "multi" }
+        },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "legendFormat": "cpu %", "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])))" },
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "B",
+            "legendFormat": "mem used GiB", "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / 1073741824" },
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "C",
+            "legendFormat": "root disk %", "expr": "100 * (1 - avg(node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}))" }
+        ]
+      },
+      {
+        "id": 4002, "type": "timeseries", "title": "ROUTER LOAD (DATABRICK 8010)",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+        "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "fixed", "fixedColor": "#B4C7E0" },
+            "custom": { "drawStyle": "line", "fillOpacity": 5, "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never" },
+            "thresholds": { "mode": "absolute", "steps": [ { "color": "#B4C7E0", "value": 0 } ] },
+            "unit": "short", "noValue": "—"
+          }, "overrides": []
+        },
+        "options": {
+          "legend": { "calcs": ["lastNotNull","mean","max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+          "tooltip": { "hideZeros": false, "mode": "multi" }
+        },
+        "targets": [
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "A",
+            "legendFormat": "{{backend}} busy", "expr": "sum by (backend) (qwen38_router_backend_busy)" },
+          { "datasource": { "type": "prometheus", "uid": "dfr1d9ottv8xsc" }, "refId": "B",
+            "legendFormat": "{{backend}} inflight", "expr": "sum by (backend) (qwen38_router_backend_router_inflight)" }
+        ]
+      }
+    ]
+  },
+  "options": { "expires": null },
+  "message": "v2 fleet dashboard — device filter + aggregate statistics"
+}

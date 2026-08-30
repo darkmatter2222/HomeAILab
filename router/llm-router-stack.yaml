@@ -1,0 +1,259 @@
+version: "3.9"
+
+services:
+  llm-router:
+    image: local/llm-router:1.0.0
+    container_name: llm-router
+    hostname: llm-router
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+
+    ports:
+      - "8001:8001"
+
+    environment:
+      # Host IPs (from .env; the router's config/router.yaml reads these).
+      HOST_5090: "${HOST_5090:-192.168.86.37}"
+      HOST_3090: "${HOST_3090:-192.168.86.48}"
+      HOST_DGXSPARK: "${HOST_DGXSPARK:-192.168.86.39}"
+
+      # Listener / public API
+      ROUTER_LISTEN_ADDR: "0.0.0.0:8001"
+      ROUTER_PUBLIC_MODEL_ALIAS: "local-coding"
+      ROUTER_ENABLE_OPENAI_API: "true"
+      ROUTER_ENABLE_ANTHROPIC_API: "true"
+
+      # Hot-path rules (static; the request path must NOT query GPU/Prometheus/
+      # Docker/Portainer/health/vLLM-queue)
+      ROUTER_DYNAMIC_GPU_CAPACITY: "false"
+      ROUTER_REQUEST_PATH_HEALTH_CHECKS: "false"
+      ROUTER_DETERMINISTIC_ROUTING: "true"
+      ROUTER_ATOMIC_RESERVATIONS: "true"
+      ROUTER_RELEASE_ON_STREAM_END: "true"
+
+      # Context routing
+      ROUTER_CONTEXT_RESERVE_TOKENS: "4096"
+      ROUTER_CONTEXT_RESERVE_PERCENT: "5"
+      ROUTER_CONTEXT_CLASSES: "65536,131072,262144"
+      ROUTER_PREFER_SMALLEST_SUFFICIENT_CONTEXT: "true"
+
+      # Failure / retry
+      ROUTER_RETRY_BEFORE_STREAM_START: "true"
+      ROUTER_RETRY_AFTER_STREAM_START: "false"
+      # Connect stays 250ms (TCP accept is fast on all backends). The response
+      # header timeout is raised to 180s because the DGX Spark Flash-Next
+      # (SSD-PLE, 180B MoE) has a ~60-120s TTFT (cold SSD-PLE prefill, ~0.8
+      # tok/s) — the slow prefill must be allowed to produce a first byte before
+      # the router declares a pre-stream failure. Global, so 5090/3090 (fast)
+      # also inherit it; harmless (a stuck request just lingers a bit longer).
+      ROUTER_UPSTREAM_CONNECT_TIMEOUT_MS: "250"
+      ROUTER_UPSTREAM_RESPONSE_HEADER_TIMEOUT_MS: "180000"
+      ROUTER_CAPACITY_LEASE_HARD_TIMEOUT_SEC: "7200"
+
+      # Async control plane
+      ROUTER_DISCOVERY_ENABLED: "true"
+      ROUTER_DISCOVERY_INTERVAL_MS: "5000"
+      ROUTER_HEALTH_ENABLED: "true"
+      ROUTER_HEALTH_INTERVAL_MS: "2000"
+      ROUTER_HEALTH_TIMEOUT_MS: "750"
+      ROUTER_HEALTH_FAILURE_THRESHOLD: "2"
+      ROUTER_HEALTH_RECOVERY_THRESHOLD: "2"
+
+      # Port contract + signatures
+      ROUTER_ENFORCE_PORT_CONTRACT: "true"
+      ROUTER_ENFORCE_SIGNATURES: "true"
+      # Discovery hosts (from .env). Comma-separated; the router splits on ','.
+      ROUTER_DISCOVERY_HOSTS: "${HOST_5090:-192.168.86.37},${HOST_3090:-192.168.86.48},${HOST_DGXSPARK:-192.168.86.39}"
+
+      # Initial registered endpoints: RTX 5090 (handoff §23) + RTX 3090
+      # (llama.cpp, Databrick 8101). Injected as JSON so the stack is
+      # self-contained; config/router.yaml is the in-repo source of truth.
+      ROUTER_ENDPOINTS_JSON: >-
+        [
+          {
+            "id": "rtx5090-qwen38-262k-01",
+            "enabled": true,
+            "host": {
+              "name": "rtx5090",
+              "address": "${HOST_5090:-192.168.86.37}",
+              "gpu_class": "RTX_5090",
+              "priority": 10
+            },
+            "runtime": {
+              "type": "vllm",
+              "version": "0.27.1",
+              "api_family": "openai",
+              "port": 8201
+            },
+            "model": {
+              "canonical_name": "Qwen3.8-27B-Uncensored",
+              "served_model_name": "qwen3.8",
+              "quantization": "modelopt_fp4"
+            },
+            "capabilities": {
+              "text": true,
+              "vision": false,
+              "tools": true,
+              "streaming": true,
+              "reasoning": true
+            },
+            "context": {
+              "max_context_tokens": 262144,
+              "context_class": "262k"
+            },
+            "behavior": {
+              "thinking": false,
+              "tool_schema": "openai",
+              "tool_call_parser": "qwen3_coder",
+              "reasoning_parser": "qwen3",
+              "chat_template_policy": "local-patched-qwen3.8-thinking-off"
+            },
+            "routing": {
+              "pool": "coding",
+              "static_capacity": 1,
+              "priority": 10,
+              "signature_group": "qwen38-coding-thinking-off"
+            },
+            "health": { "path": "/health" },
+            "models": { "path": "/v1/models" },
+            "metrics": { "path": "/metrics" }
+          },
+          {
+            "id": "rtx3090-qwen38-262k-01",
+            "enabled": true,
+            "host": {
+              "name": "rtx3090",
+              "address": "${HOST_3090:-192.168.86.48}",
+              "gpu_class": "RTX_3090",
+              "priority": 20
+            },
+            "runtime": {
+              "type": "llama.cpp",
+              "version": "server-cuda12",
+              "api_family": "openai",
+              "port": 8101
+            },
+            "model": {
+              "canonical_name": "Qwen3.8-27B-Uncensored",
+              "served_model_name": "qwen3.8",
+              "quantization": "q4_k_m"
+            },
+            "capabilities": {
+              "text": true,
+              "vision": false,
+              "tools": true,
+              "streaming": true,
+              "reasoning": false
+            },
+            "context": {
+              "max_context_tokens": 262144,
+              "context_class": "262k"
+            },
+            "behavior": {
+              "thinking": false,
+              "tool_schema": "openai",
+              "tool_call_parser": "jinja",
+              "reasoning_parser": "deepseek",
+              "chat_template_policy": "qwen-fixed-chat-template-v22"
+            },
+            "routing": {
+              "pool": "coding",
+              "static_capacity": 1,
+              "priority": 20,
+              "signature_group": "qwen38-coding-thinking-off"
+            },
+            "health": { "path": "/health" },
+            "models": { "path": "/v1/models" },
+            "metrics": { "path": "/metrics" }
+          },
+          {
+            "id": "dgxspark-flashnext-262k-01",
+            "enabled": true,
+            "host": {
+              "name": "dgxspark",
+              "address": "${HOST_DGXSPARK:-192.168.86.39}",
+              "gpu_class": "NVIDIA_GB10",
+              "priority": 30
+            },
+            "runtime": {
+              "type": "vision",
+              "version": "ds4-ssd-pole-flashnext",
+              "api_family": "openai",
+              "port": 8401
+            },
+            "model": {
+              "canonical_name": "Qwen3.8-Flash-Next",
+              "served_model_name": "qwen3.8",
+              "quantization": "q6-ssd-ple-bf16"
+            },
+            "capabilities": {
+              "text": true,
+              "vision": true,
+              "tools": true,
+              "streaming": true,
+              "reasoning": false
+            },
+            "context": {
+              "max_context_tokens": 262144,
+              "context_class": "262k"
+            },
+            "behavior": {
+              "thinking": false,
+              "tool_schema": "openai",
+              "tool_call_parser": "jinja",
+              "reasoning_parser": "deepseek",
+              "chat_template_policy": "flashnext-vision"
+            },
+            "routing": {
+              "pool": "coding",
+              "static_capacity": 3,
+              "priority": 30,
+              "signature_group": "qwen38-coding-thinking-off"
+            },
+            "health": { "path": "/health" },
+            "models": { "path": "/v1/models" },
+            "metrics": { "path": "/metrics" }
+          }
+        ]
+
+      # Observability / admin
+      ROUTER_METRICS_ENABLED: "true"
+      ROUTER_METRICS_PATH: "/metrics"
+      ROUTER_HEALTH_PATH: "/health"
+      ROUTER_ADMIN_ENABLED: "true"
+      ROUTER_ADMIN_PREFIX: "/admin"
+      ROUTER_LOG_LEVEL: "info"
+      ROUTER_LOG_ROUTING_DECISIONS: "true"
+
+      # Optional preferred conversation affinity (a preference, never a
+      # hard dependency).
+      ROUTER_AFFINITY_MODE: "preferred"
+      ROUTER_AFFINITY_FALLBACK: "true"
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+    healthcheck:
+      test:
+        - CMD
+        - /llm-router
+        - health-probe
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+    labels:
+      ai.router.role: "router"
+      ai.router.schema-version: "1.0"
+      ai.router.public-port: "8001"
+      ai.router.public-model: "local-coding"
+      ai.router.port-contract: "enforced"
+      ai.router.discovery: "async"
+      ai.router.capacity-mode: "static-atomic"
+      ai.router.hot-path-health-checks: "false"
+      ai.router.dynamic-gpu-capacity: "false"

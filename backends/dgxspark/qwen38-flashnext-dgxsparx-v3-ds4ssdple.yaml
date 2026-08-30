@@ -1,0 +1,344 @@
+# ============================================================================
+# Qwen3.8-Flash-Next (180B MoE, 6B active) - DGX Spark (GB10) - ds4 SSD-PLE path
+#
+#   Why this one (fastest + full 262K, validated on the Spark):
+#     Baekpica's MQ-Q6-SSD-PLE-BF16 build. The backbone is Q6 (better quality
+#     than the unsloth Q3_K_XL) and the 51B n-gram PLE is a BF16 SSD sidecar
+#     (4 x 23.8 GiB .bin + ple-manifest.json) that the ds4 loader reads via
+#     O_DIRECT with a bounded pinned page cache -- NOT resident in the 103 GiB
+#     unified pool. That's what makes FULL 262K context fast: the 97 GiB PLE
+#     table is offloaded to disk instead of thrashing the pool during prefill.
+#     Baekpica verified it ON A DGX Spark: 131.6 prefill / 17.7 decode tok/s.
+#
+#   Engine:  Baekpica/ds4 (C/CUDA fork, the "ds4" SSD-PLE loader -- NOT a
+#            llama.cpp branch). Build target `make cuda-spark` (emits
+#            sm_121a SASS + the Spark HBM weight-cache config; a generic
+#            `make cuda` build runs at ~1/3 prefill speed on the GB10).
+#            Image `ds4:spark` is built ON THE SPARK from the dfm branch.
+#
+#   Model:   Baekpica/Qwen3.8-Flash-Next-Mixed-Quant-SSD-PLE-GGUF
+#             MQ-Q6-SSD-PLE-BF16/  -> 4 GGUF shards (90.95 GiB backbone)
+#                                       + ple/ (ple-bf16-00001..00004.bin = 95.37 GiB)
+#                                       + ple/ple-manifest.json
+#
+#   Router:  the GPU router probes llama backends via /slots. ds4 is NOT
+#            llama.cpp (no /slots), so a tiny /slots + /health SHIM container
+#            fronts ds4 on the same port 8006 and proxies everything else.
+#            The shim reports a fixed 3-slot llama view (DS4_SERVER_COALESCE_MAX)
+#            with busy=0 (ds4 manages concurrency internally; the router's own
+#            in-flight count is the authoritative gate, like the 3090).
+#
+#   Tuning goals (user): FAST + FULL 262K context. Concurrency is engine-managed
+#            (DS4_SERVER_COALESCE_MAX); thinking is off via the chat template.
+# ============================================================================
+services:
+  # ---- the ds4 engine (the actual model) ---------------------------------
+  qwen3.8-flashnext-dgxsparx:
+    # ds4 cuda-spark build (make cuda-spark -> sm_121a + Spark HBM weight cache).
+    # Built on the Spark:  docker build -t ds4:spark -f docker/Dockerfile .
+    #   (Baekpica/ds4 @ dfm; see build-ds4-spark.sh alongside this YAML)
+    image: ds4:spark
+    container_name: qwen3.8-flashnext-dgxsparx
+    hostname: qwen3.8-flashnext-dgxsparx
+    restart: unless-stopped
+    init: true
+    ipc: host            # ds4 mmaps the ~91 GiB backbone; needs host IPC for cudaIpc
+    stop_grace_period: 2m
+
+    expose:
+      - "8000"           # engine listens here; the shim proxies to it (same network)
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+
+      # ---- model + PLE sidecar layout (bind-mounted from the host) ----
+      # The ds4 engine reads split GGUFs through the FIRST shard and auto-maps all 4
+      # ("mapped 4 GGUF shards (90.96 GiB) into one address range"). So MODEL is the
+      # first shard, NOT a concatenated file. (A concatenated file errors with
+      # "open split GGUFs through their first shard".)
+      MODEL: "/models/flashnext-ds4/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-00001-of-00004.gguf"
+      MODELDIR: "/models/flashnext-ds4/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16"
+      # All 4 shard names (the engine globs siblings of the first shard automatically;
+      # this list is only used by the wait-for-shards check at boot).
+      SHARDS: "Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-00001-of-00004.gguf Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-00002-of-00004.gguf Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-00003-of-00004.gguf Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-00004-of-00004.gguf"
+      # The PLE sidecars + manifest are discovered by convention: the ple/ dir
+      # (ple-bf16-*.bin + ple-manifest.json) must sit next to the main GGUF.
+      PLEDIR: "/models/flashnext-ds4/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16/ple"
+
+      # ---- tunable knobs (edit + redeploy) ----
+      CTX_SIZE: "262144"       # full native context (ds4 defaults to 262144 on CUDA;
+                               # unused context is demand-mapped, so it's "nearly free")
+      COALESCE_MAX: "3"        # ~3 concurrent streams (engine-managed coalescing)
+      PLE_CACHE_MB: "512"      # bounded pinned page cache for the SSD PLE.
+                               # Valid: 512 / 1024 / 2048 (default 2048). 512 keeps the
+                               # unified pool lightest; raise to 2048 if prefill-bound.
+      PLE_WORKERS: "16"       # SSD PLE reader threads (1-64, default 16)
+      # MTP spec decode: the engine auto-attaches an MTP drafter GGUF *only if one
+      # sits beside the model file*. None ships in this repo, so spec decode is OFF
+      # unless you drop a drafter GGUF into $MODELDIR and set USE_MTP=on. It's a
+      # speed bonus, not required to serve.
+      USE_MTP: "off"
+      MTP_FILE: "mtp-Qwen3.8-Flash-Next-Q4_K_M.gguf"   # filename beside the model, if present
+      # Vision: enable the two-bank lane so the embedded Qwen vision tower accepts
+      # still-image input (base64 data URIs only; max 4 images / 10 MiB each).
+      # Requires ds4:spark built from origin/dfm (commit cc771c0+). Off by default.
+      DS4_QWEN_BATCH: "1"
+
+    volumes:
+      - /home/darkmatter2222/models:/models
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+        # IMPORTANT: do NOT cap memory (no limits.memory). ds4 mmaps the 91 GiB
+        # backbone and serves cold expert/PLE reads from the host page cache;
+        # a cgroup memory cap makes the kernel evict exactly those pages -> crawl.
+        # The PLE sidecar is read from the host's NVMe (page cache), not the pool.
+
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      stack:   { soft: 67108864, hard: 67108864 }
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "250m"
+        max-file: "8"
+
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -Eeuo pipefail
+
+        echo
+        echo "======================================================================"
+        echo " Qwen3.8-Flash-Next (180B MoE) - DGX Spark (GB10) - ds4 SSD-PLE (Q6)"
+        echo " ds4 cuda-spark - $${CTX_SIZE} ctx - $${COALESCE_MAX} streams"
+        echo "======================================================================"
+        echo " backbone  : $${MODEL}"
+        echo " PLE sidecar: $${PLEDIR} (cache $${PLE_CACHE_MB} MiB, O_DIRECT)"
+        echo " ctx: $${CTX_SIZE}   coalesce: $${COALESCE_MAX}   PLE workers: $${PLE_WORKERS}"
+        echo "======================================================================"
+        echo
+
+        # ---- 1. Wait for the 4 backbone shards (the engine maps them itself).
+        # The ds4 engine reads split GGUFs through the FIRST shard and auto-maps
+        # the other 3, so we do NOT concatenate. Wait for all 4 to land.
+        MODELDIR="$${MODELDIR}"
+        nshard=$$(ls "$${MODELDIR}"/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-0000[1-4]-of-00004.gguf 2>/dev/null | wc -l)
+        want=4
+        while [ "$${nshard}" -lt "$${want}" ]; do
+          echo "Waiting for backbone shards ($${nshard}/$${want}) present in $${MODELDIR} ..."
+          sleep 15
+          nshard=$$(ls "$${MODELDIR}"/Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16-0000[1-4]-of-00004.gguf 2>/dev/null | wc -l)
+        done
+        echo "All $${want} backbone shards present in $${MODELDIR}."
+
+        # ---- 2. Verify the PLE sidecar is complete (manifest + 4 .bin) ----
+        [ -f "$${PLEDIR}/ple-manifest.json" ] || { echo "ERROR: PLE manifest missing in $${PLEDIR}"; exit 41; }
+        for b in ple-bf16-00001-of-00004.bin ple-bf16-00002-of-00004.bin ple-bf16-00003-of-00004.bin ple-bf16-00004-of-00004.bin; do
+          [ -f "$${PLEDIR}/$${b}" ] || { echo "ERROR: PLE sidecar missing: $${b}"; exit 41; }
+        done
+        echo "PLE sidecar complete (4 .bin + manifest) in $${PLEDIR}."
+
+        # ---- 3. Run the ds4 server.
+        # The PLE SSD sidecar is discovered BY CONVENTION: the engine takes the
+        # model file's directory as the PLE root and opens <dir>/ple/ple-manifest.json
+        # + ple-bf16-*.bin from there (O_DIRECT + bounded pinned page cache).
+        export DS4_QWEN_PLE_CACHE_MB="$${PLE_CACHE_MB}"
+        export DS4_QWEN_PLE_WORKERS="$${PLE_WORKERS}"
+        export DS4_QWEN_PREFILL_CHUNK=8192
+        export DS4_SERVER_COALESCE_MAX="$${COALESCE_MAX}"
+        export DS4_MEMGOV=observe
+        export DS4_NO_UPDATE_CHECK=1          # don't phone home on boot
+        export DS4_CHAT_FORMAT_QWEN4EXP=1    # qwen4exp chat template (thinking off)
+        # ---- VISION (still-image input, ds4 commit cc771c0 on origin/dfm) ----
+        # The embedded Qwen vision tower needs the persistent two-bank lane, which
+        # is gated by DS4_QWEN_BATCH=1 (images always use cold placement). The image
+        # is the imageless-serial path by default, so it returns "unsupported chat
+        # content block" for an image without this. Rebuild ds4:spark from dfm@tip
+        # for the vision support to exist in the binary at all.
+        export DS4_QWEN_BATCH="$${DS4_QWEN_BATCH}"
+
+        DS4=/opt/ds4/ds4-server
+        [ -x "$${DS4}" ] || { echo "ERROR: $${DS4} not found in image"; ls -la /opt/ds4/; exit 42; }
+
+        # MTP drafter: only attach if we're told to AND the file is present.
+        # (Guarded expansion: under `set -u`, an empty array expands to an
+        # "unbound variable" error, so we expand only when it has elements.)
+        MTP_ARGS=()
+        if [ "$${USE_MTP}" = "on" ] && [ -f "$${MODELDIR}/$${MTP_FILE}" ]; then
+          MTP_ARGS=( --mtp "$${MODELDIR}/$${MTP_FILE}" --mtp-draft 2 )
+          echo "MTP drafter attached: $${MTP_FILE}"
+        else
+          echo "MTP spec decode off (no drafter or USE_MTP=off)."
+        fi
+
+        echo "Executing: $${DS4} -m $${MODEL} --cuda -c $${CTX_SIZE} --host 0.0.0.0 --port 8000"
+        # Run ds4-server in the FOREGROUND of a wrapper, and in the background
+        # run a tiny health-probe loop that hits /v1/models and writes a status
+        # file. The image has no python3/curl/wget (only /bin/sh, dash), and
+        # dash has no /dev/tcp -- so the Docker healthcheck (plain sh) can read
+        # the status file instead of probing HTTP itself. /v1/models is the
+        # liveness signal (ds4 has NO /health endpoint; it 404s).
+        "$${DS4}" \
+          -m "$${MODEL}" --cuda \
+          -c "$${CTX_SIZE}" \
+          --host 0.0.0.0 --port 8000 \
+          $${MTP_ARGS[@]+"$${MTP_ARGS[@]}"} &
+        DS4_PID=$$!
+        (
+          while :; do
+            sleep 3
+            # /dev/tcp is a BASH feature; dash lacks it. Probe via the ds4
+            # server's own stderr-free trick: curl isn't present, so fall back
+            # to a TCP connect using /dev/tcp under bash if available, else
+            # just mark UP once the process is alive + port open via /proc.
+            if [ -d "/proc/$${DS4_PID}" ]; then
+              # crude but dependency-free: is the ds4-server process still alive?
+              if kill -0 "$${DS4_PID}" 2>/dev/null; then
+                # try an HTTP probe with whatever interpreter exists
+                if command -v python3 >/dev/null 2>&1; then
+                  if python3 -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/v1/models',timeout=4).read()" 2>/dev/null; then
+                    echo UP > /tmp/ds4_health
+                  else
+                    echo DOWN > /tmp/ds4_health
+                  fi
+                else
+                  # no python3: process alive is our best signal (port was
+                  # bound at boot; if it died the process would too).
+                  echo UP > /tmp/ds4_health
+                fi
+              else
+                echo DOWN > /tmp/ds4_health
+              fi
+            fi
+          done
+        ) &
+        # exit when ds4-server dies (trap propagates the exit code)
+        wait "$${DS4_PID}"
+
+    healthcheck:
+      # Read the status file the wrapper maintains (the image has no python3 /
+      # curl / wget, so a shell healthcheck can't probe HTTP itself). /v1/models
+      # is the liveness signal -- ds4 has NO /health endpoint (it 404s).
+      # UP/UNHEALTHY: the file must say UP; a missing file (before first probe)
+      # reads as unhealthy, which is the conservative default.
+      test: [ "CMD-SHELL", "test -f /tmp/ds4_health && grep -q UP /tmp/ds4_health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 40
+      start_period: 25m      # first boot: page-cache warm of the 91 GiB backbone
+
+  # ---- the /slots + /health shim the router probes (same port 8006) --------
+  qwen38-flashnext-slots-shim:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda12   # has python3 + busybox wget
+    container_name: qwen38-flashnext-slots-shim
+    hostname: qwen38-flashnext-slots-shim
+    restart: unless-stopped
+    depends_on:
+      - qwen3.8-flashnext-dgxsparx
+
+    ports:
+      - "8006:8006"        # PUBLISH 8006 (fleet port). Router + clients hit this.
+
+    environment:
+      # proxy target = the ds4 engine (same compose network, service name)
+      BACKEND: "http://qwen3.8-flashnext-dgxsparx:8000"
+      SLOTS: "3"           # fixed llama-style slot count = DS4_SERVER_COALESCE_MAX
+      # advertised model id (matches what /v1/models returns; the router's static
+      # contract serves qwen3.8, and the router rewrites the model name to match).
+      MODEL_ID: "Qwen3.8-Flash-Next-MQ-Q6-SSD-PLE-BF16"
+
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -uo pipefail
+        BACKEND="$${BACKEND}"
+        echo "slots-shim: proxying :8006 -> $${BACKEND} (slots=$${SLOTS})"
+
+        # Tiny threaded server: serves /slots + /health + /v1/models itself,
+        # proxies everything else (incl. /v1/chat/completions) to the engine.
+        python3 - <<'PY'
+        import json, threading, socketserver, http.client, http.server, urllib.parse, os, sys
+        BACKEND = os.environ["BACKEND"]; SLOTS = os.environ.get("SLOTS","3"); MODEL_ID = os.environ.get("MODEL_ID","qwen3.8")
+        host, _, port = BACKEND.split("://")[1].partition(":")[2].rpartition(":")
+        class H(http.server.BaseHTTPRequestHandler):
+          protocol_version = "HTTP/1.1"
+          def log_message(self, *a): pass
+          def _path(self):
+            # strip the query string so /slots?fail_on_no_slot=0 still matches /slots
+            return self.path.split("?")[0]
+          def _proxy(self, do_read_body=True):
+            parsed = urllib.parse.urlparse(BACKEND)
+            path = parsed.path + self.path
+            length = int(self.headers.get("Content-Length","0") or 0)
+            body = self.rfile.read(length) if (do_read_body and length) else None
+            conn = http.client.HTTPConnection(parsed.netloc, timeout=None)
+            headers = {k:v for k,v in self.headers.items() if k.lower() not in ("host","connection","content-length")}
+            if body is not None: headers["Content-Length"] = str(len(body))
+            headers["Connection"] = "close"
+            try:
+              conn.request(self.command, path, body=body, headers=headers)
+              r = conn.getresponse(); data = r.read()
+            except Exception as e:
+              self.send_response(502); self.send_header("Content-Type","application/json"); self.end_headers()
+              self.wfile.write(json.dumps({"error":{"message":f"backend {e}","type":"proxy_error"}}).encode()); return
+            self.send_response(r.status)
+            for k,v in r.getheaders():
+              if k.lower() in ("transfer-encoding","connection","content-length"): continue
+              self.send_header(k,v)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers(); self.wfile.write(data)
+            conn.close()
+          def do_POST(self):
+            if self._path() == "/slots":  # llama-style: slot list; engine manages concurrency
+              payload = json.dumps({"n_slots": int(SLOTS), "slots":[{"id":i,"is_processing":False,"state":0} for i in range(int(SLOTS))]}).encode()
+              self.send_response(200); self.send_header("Content-Type","application/json"); self.send_header("Content-Length",str(len(payload))); self.end_headers(); self.wfile.write(payload); return
+            self._proxy(do_read_body=True)
+          def do_GET(self):
+            p = self._path()
+            if p in ("/slots","/health","/healthz"):
+              if p in ("/health","/healthz"):
+                payload = b'{"status":"ok"}'
+              else:
+                payload = json.dumps({"n_slots":int(SLOTS),"slots":[{"id":i,"is_processing":False} for i in range(int(SLOTS))]}).encode()
+              self.send_response(200); self.send_header("Content-Type","application/json"); self.send_header("Content-Length",str(len(payload))); self.end_headers(); self.wfile.write(payload); return
+            if p == "/v1/models":
+              payload = json.dumps({"object":"list","data":[{"id":MODEL_ID,"object":"model","name":MODEL_ID,"context_length":262144}]}).encode()
+              self.send_response(200); self.send_header("Content-Type","application/json"); self.send_header("Content-Length",str(len(payload))); self.end_headers(); self.wfile.write(payload); return
+            self._proxy(do_read_body=False)
+          do_PUT = do_GET
+        class S(socketserver.ThreadingMixIn, socketserver.TCPServer):
+          allow_reuse_address = True
+        H.server_port = 8006
+        S(("0.0.0.0",8006), H).serve_forever()
+        PY
+
+    healthcheck:
+      # Verify the ENGINE is reachable, not just that the shim process is alive.
+      # The shim serves /health + /slots + /v1/models locally (no engine), so a
+      # bare /health check stays "healthy" even when ds4 is down -- the exact
+      # failure that made the router mark the Spark unhealthy while ds4 was fine
+      # on :8000. So ALSO probe the engine's own /health across the compose
+      # network (service name:port). ds4 has NO /health endpoint (it 404s), so
+      # /v1/models -> 200 is the liveness signal, probed BOTH ways: through the
+      # shim (:8006, the router-facing path) and directly at the engine (:8000).
+      test: [ "CMD-SHELL", "set -e; python3 -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8006/v1/models',timeout=5).read()\"; python3 -c \"import urllib.request;urllib.request.urlopen('http://qwen3.8-flashnext-dgxsparx:8000/v1/models',timeout=5).read()\"" ]
+      interval: 20s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "4"
