@@ -1,49 +1,347 @@
+# =============================================================================
+# RTX 5090 — Huihui Qwen3.8-27B Abliterated
+# vLLM 0.28.0 + SM120 NVFP4 KV/XQA + production-speed observability
+#
+# SINGLE PORTAINER YAML
+#
+# - Full 262,144 context
+# - Huihui abliterated Qwen3.8-27B compressed-tensors NVFP4 W4A4
+# - NVFP4 4-bit KV cache
+# - RTX 5090 / SM120 patch stack pinned to a known-good commit and installed automatically
+# - FlashInfer attention
+# - FlashInfer LIVE AUTOTUNING OFF  <-- prevents FP4 tuner OOM
+# - Prefix caching ON
+# - Chunked prefill ON
+# - BF16 MTP head preserved; MTP speculative decoding ON at n=4
+# - ReplaySSM-spec 0111 intentionally omitted (requires mamba-cache-mode none)
+# - Explicit 7 GiB NVFP4 KV cache cap; keeps 262K while reclaiming workstation VRAM
+# - Model/patch downloads capped at 25 MiB/s with 2-second progress + ETA
+# - Low-overhead production logging + persistent GPU/system/Prometheus telemetry
+# - THINKING HARD OFF V2: enable_thinking=false + preserve_thinking=false
+# - NO reasoning parser: prevents Anthropic /v1/messages from surfacing output as thinking blocks
+# =============================================================================
+
+
+x-router-manifest:
+  schema_version: "1.0"
+
+  instance:
+    id: "rtx5090-qwen38-262k-01"
+    display_name: "RTX 5090 Huihui Qwen3.8-27B Abliterated NVFP4 262K"
+    enabled: true
+
+  host:
+    name: "rtx5090"
+    gpu_class: "RTX_5090"
+    gpu_count: 1
+
+  runtime:
+    type: "vllm"
+    version: "0.28.0"
+    api_family: "openai"
+    published_port: 8201
+    container_port: 8006
+
+  model:
+    canonical_name: "Huihui-Qwen3.8-27B-abliterated-NVFP4"
+    served_model_name: "qwen3.8"
+    repository: "sakamakismile/Huihui-Qwen3.8-27B-abliterated-NVFP4"
+    quantization: "compressed_tensors_nvfp4"
+
+  capabilities:
+    text: true
+    vision: false
+    tools: true
+    streaming: true
+    reasoning: false
+
+  context:
+    max_context_tokens: 262144
+
+  request_format:
+    tool_schema: "openai"
+    tool_call_parser: "qwen3_coder"
+    reasoning_parser: "none"
+    chat_template_policy: "local-patched-qwen3.8-thinking-hard-off-v2-no-reasoning-parser"
+
+  behavior:
+    thinking_mode: false
+
+  routing:
+    static_capacity: 1
+    priority: 10
+    pool: "coding"
+    context_class: "262k"
+    signature_group: "qwen38-coding-thinking-hard-off-mtp4"
+
+  observability:
+    health_path: "/health"
+    models_path: "/v1/models"
+    metrics_path: "/metrics"
+
+
 services:
+
   qwen38-vllm-5090:
-    image: vllm/vllm-openai:v0.27.1
+
+    image: "vllm/vllm-openai:v0.28.0"
+    pull_policy: if_not_present
+
     container_name: qwen38-vllm-5090
     hostname: qwen38-vllm-5090
 
     restart: unless-stopped
     init: true
     ipc: host
+
     stop_grace_period: 2m
 
+
+    # =========================================================================
+    # ROUTER LABELS
+    # =========================================================================
+
+    labels:
+
+      ai.router.enabled: "true"
+      ai.router.schema-version: "1.0"
+
+      ai.router.instance-id: "rtx5090-qwen38-262k-01"
+      ai.router.host: "rtx5090"
+
+      ai.router.runtime: "vllm"
+      ai.router.runtime-version: "0.28.0"
+      ai.router.api-family: "openai"
+
+      ai.router.published-port: "8201"
+      ai.router.container-port: "8006"
+
+      ai.router.model-family: "qwen3.8"
+      ai.router.model: "Huihui-Qwen3.8-27B-abliterated-NVFP4"
+      ai.router.served-model-name: "qwen3.8"
+
+      ai.router.quantization: "compressed_tensors_nvfp4"
+
+      ai.router.context: "262144"
+      ai.router.context-class: "262k"
+
+      ai.router.text: "true"
+      ai.router.vision: "false"
+
+      ai.router.tools: "true"
+      ai.router.streaming: "true"
+
+      ai.router.thinking-mode: "false"
+
+      ai.router.tool-schema: "openai"
+      ai.router.tool-call-parser: "qwen3_coder"
+      ai.router.reasoning-parser: "none"
+
+      ai.router.chat-template-policy: "local-patched-qwen3.8-thinking-hard-off-v2-no-reasoning-parser"
+      ai.router.signature-group: "qwen38-coding-thinking-hard-off-mtp4"
+
+      ai.router.pool: "coding"
+      ai.router.capacity: "1"
+      ai.router.priority: "10"
+
+      ai.router.health-path: "/health"
+      ai.router.models-path: "/v1/models"
+      ai.router.metrics-path: "/metrics"
+
+
+    # =========================================================================
+    # NETWORK
+    # =========================================================================
+
     ports:
-      - "8006:8006"
+      - "8201:8006"
+
+
+    # =========================================================================
+    # ENVIRONMENT
+    # =========================================================================
 
     environment:
+
+      # -----------------------------------------------------------------------
+      # NVIDIA
+      # -----------------------------------------------------------------------
+
       NVIDIA_VISIBLE_DEVICES: "0"
       NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
       CUDA_DEVICE_ORDER: "PCI_BUS_ID"
+      CUDA_MODULE_LOADING: "LAZY"
 
-      MODEL_REPO: "joshebbs/qwen3.8-27b-uncensored-nvfp4-modelopt"
-      MODEL_DIR: "/models/Qwen3.8-27B-Uncensored-NVFP4"
+
+      # -----------------------------------------------------------------------
+      # MODEL
+      # -----------------------------------------------------------------------
+
+      MODEL_REPO: "sakamakismile/Huihui-Qwen3.8-27B-abliterated-NVFP4"
+      MODEL_REVISION: "36276309d30211d9babf72f22d1605dc2dc6357c"
+      PATCH_REPO_COMMIT: "dd6801ed1d7a3f309096840e567a063335ff72d0"
+      MODEL_DIR: "/models/Huihui-Qwen3.8-27B-abliterated-NVFP4"
 
       HF_HOME: "/models/.cache/huggingface"
       HUGGINGFACE_HUB_CACHE: "/models/.cache/huggingface/hub"
 
       HF_TOKEN: "${HF_TOKEN:-}"
 
+
+      # -----------------------------------------------------------------------
+      # DOWNLOAD LIMIT
+      #
+      # 25 MiB/sec
+      #
+      # 25 * 1024 * 1024 = 26,214,400 bytes/sec
+      # -----------------------------------------------------------------------
+
       DOWNLOAD_LIMIT_BPS: "26214400"
+      DOWNLOAD_PROGRESS_INTERVAL_SEC: "2"
+
+
+      # -----------------------------------------------------------------------
+      # CONTEXT
+      # -----------------------------------------------------------------------
+
+      MAX_CONTEXT: "262144"
+
+      MAX_SEQS: "1"
+
+      PREFILL_BATCH: "4096"
+
+
+      # -----------------------------------------------------------------------
+      # GPU / KV MEMORY
+      #
+      # IMPORTANT:
+      # Use an EXPLICIT KV cache budget instead of gpu-memory-utilization.
+      #
+      # Previous 0.93 auto-sizing allocated ~9.75 GiB NVFP4 KV and a
+      # 453,897-token cache although the API context limit is 262,144.
+      # On this Windows/WDDM workstation dedicated VRAM reached ~31.2/31.5 GB.
+      #
+      # 7 GiB should still provide ~320K+ NVFP4 KV tokens while returning
+      # roughly ~2.75 GiB VRAM headroom to the workstation.
+      #
+      # vLLM 0.28: --kv-cache-memory-bytes overrides gpu-memory-utilization,
+      # so the latter is intentionally not passed.
+      # -----------------------------------------------------------------------
+
+      KV_CACHE_MEMORY_BYTES: "7G"
+
+      KV_DTYPE: "nvfp4"
+
+
+      # -----------------------------------------------------------------------
+      # MTP
+      #
+      # This checkpoint preserves the 15 MTP modules in BF16 and wires them
+      # into the safetensors index. Use n=4 for the RTX 5090 speed profile.
+      # -----------------------------------------------------------------------
+
+      USE_MTP: "on"
+
+      MTP_TOKENS: "4"
+
+
+      # -----------------------------------------------------------------------
+      # CUDA / PYTORCH
+      # -----------------------------------------------------------------------
 
       PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
 
+
+      # -----------------------------------------------------------------------
+      # FLASHINFER
+      # -----------------------------------------------------------------------
+
       VLLM_USE_FLASHINFER_SAMPLER: "1"
 
+      VLLM_FLASHINFER_WORKSPACE_BUFFER_SIZE: "134217728"
+
+      # Explicit SM120 patched-path switches.
+      VLLM_SM12X_NVFP4_XQA: "1"
+      VLLM_SM12X_XQA_VERIFY: "1"
+
+
+      # -----------------------------------------------------------------------
+      # COMPILATION
+      # -----------------------------------------------------------------------
+
+      TORCHINDUCTOR_COMPILE_THREADS: "8"
+
+      MAX_JOBS: "4"
+
+      FLASHINFER_NUM_COMPILE_JOBS: "4"
+
+      PYTHONHASHSEED: "0"
+
+
+      # -----------------------------------------------------------------------
+      # PRODUCTION-SPEED LOGGING / OBSERVABILITY
+      #
+      # Keep server stats and low-rate KV metrics, but do not serialize entire
+      # prompts/token IDs or emit per-iteration/JIT/CUDA-graph/MFU debug spam.
+      # -----------------------------------------------------------------------
+
+      VLLM_LOGGING_LEVEL: "INFO"
+
+      VLLM_LOG_STATS_INTERVAL: "2"
+
+      LOCAL_DEEP_DEBUG: "0"
+
+      # Low-overhead KV residency sampling.
+      KV_CACHE_METRICS_SAMPLE: "0.01"
+
+      LOG_DIR: "/logs"
+      GPU_TELEMETRY_INTERVAL_SEC: "1"
+      SYSTEM_TELEMETRY_INTERVAL_SEC: "1"
+      PROMETHEUS_SNAPSHOT_INTERVAL_SEC: "10"
+
+
+    # =========================================================================
+    # STORAGE
+    # =========================================================================
+
     volumes:
+
       - /home/darkmatter2222/models:/models
 
+      # Persistent diagnostic logs survive container recreation.
+      - /home/darkmatter2222/qwen5090-logs:/logs
+
+      - qwen5090_vllm_cache:/root/.cache/vllm
+      - qwen5090_triton_cache:/root/.triton
+      - qwen5090_torch_cache:/root/.cache/torch
+      - qwen5090_flashinfer_cache:/root/.cache/flashinfer
+
+
+    # =========================================================================
+    # GPU
+    # =========================================================================
+
     deploy:
+
       resources:
+
         reservations:
+
           devices:
+
             - driver: nvidia
               count: 1
+
               capabilities:
                 - gpu
 
+
+    # =========================================================================
+    # ULIMITS
+    # =========================================================================
+
     ulimits:
+
       memlock:
         soft: -1
         hard: -1
@@ -52,284 +350,268 @@ services:
         soft: 67108864
         hard: 67108864
 
+
+    # =========================================================================
+    # LOG ROTATION
+    # =========================================================================
+
     logging:
+
       driver: json-file
+
       options:
-        max-size: "250m"
-        max-file: "8"
+        max-size: "1g"
+        max-file: "20"
+
+
+    # =========================================================================
+    # ENTRYPOINT
+    # =========================================================================
 
     entrypoint:
       - /bin/bash
       - -lc
 
+
     command:
       - |
+
         set -Eeuo pipefail
 
+
+        #######################################################################
+        # PERSISTENT CONSOLE LOG
+        #######################################################################
+
+        mkdir -p "$${LOG_DIR}"
+        RUN_ID="$$(date -u +%Y%m%dT%H%M%SZ)"
+        export RUN_ID
+        CONSOLE_LOG="$${LOG_DIR}/vllm-console-$${RUN_ID}.log"
+        exec > >(tee -a "$${CONSOLE_LOG}") 2>&1
+        echo "Persistent console log: $${CONSOLE_LOG}"
+
+
+        #######################################################################
+        # BANNER
+        #######################################################################
+
         echo
         echo "======================================================================"
-        echo " Qwen3.8-27B Uncensored NVFP4"
-        echo " RTX 5090 - vLLM 0.27.1 - FULL 262K - FIXED 8.5 GiB KV"
+        echo " Huihui Qwen3.8-27B Abliterated — RTX 5090"
+        echo " vLLM 0.28.0 + SM120 NVFP4 KV + XQA"
         echo "======================================================================"
-        echo " Repository   : $${MODEL_REPO}"
-        echo " Model path   : $${MODEL_DIR}"
-        echo " API          : http://0.0.0.0:8006/v1"
-        echo " Anthropic    : http://0.0.0.0:8006/v1/messages"
-        echo " Model alias  : qwen3.8"
-        echo " Context      : 262144"
-        echo " Parallel     : 2"
-        echo " Weights      : NVFP4"
-        echo " KV           : FP8"
-        echo " KV allocation: fixed 8.5 GiB"
-        echo " Spec decode  : OFF (MTP checkpoint incompatible)"
+        echo " Context             : $${MAX_CONTEXT}"
+        echo " Max sequences       : $${MAX_SEQS}"
+        echo " Prefill chunk       : $${PREFILL_BATCH}"
+        echo " Weight format       : compressed-tensors NVFP4 W4A4"
+        echo " KV format           : $${KV_DTYPE}"
+        echo " KV cache budget     : $${KV_CACHE_MEMORY_BYTES} explicit"
+        echo " MTP                 : $${USE_MTP}"
+        echo " Prefix cache        : ON"
+        echo " FlashInfer autotune : OFF"
+        echo " SM120 NVFP4 preflight: ON"
+        echo " vLLM logging        : $${VLLM_LOGGING_LEVEL}"
+        echo " Deep debug          : $${LOCAL_DEEP_DEBUG}"
+        echo " GPU telemetry       : every $${GPU_TELEMETRY_INTERVAL_SEC}s"
+        echo " Metrics snapshots   : every $${PROMETHEUS_SNAPSHOT_INTERVAL_SEC}s"
+        echo " Patch commit        : $${PATCH_REPO_COMMIT}"
+        echo " Download cap        : 25 MiB/sec"
+        echo " Download progress   : every $${DOWNLOAD_PROGRESS_INTERVAL_SEC}s"
         echo "======================================================================"
         echo
 
-        mkdir -p "$${MODEL_DIR}"
-        mkdir -p "$${HF_HOME}"
 
-        ######################################################################
-        # RATE-LIMITED / RESUMABLE MODEL DOWNLOAD
-        #
-        # Aggregate bandwidth cap:
-        # <= 25 MiB/sec
-        ######################################################################
+        #######################################################################
+        # VERIFY BASE IMAGE
+        #######################################################################
 
         python3 - <<'PY'
+
+        import vllm
+
+        print(
+            "Base vLLM version:",
+            vllm.__version__,
+            flush=True,
+        )
+
+        if not str(
+            vllm.__version__
+        ).startswith("0.28.0"):
+
+            raise RuntimeError(
+                f"Expected vLLM 0.28.0, got {vllm.__version__}"
+            )
+
+        PY
+
+
+        #######################################################################
+        # INSTALL PATCH UTILITY
+        #
+        # apt downloads are also limited to approximately 25 MiB/s.
+        #######################################################################
+
+        if ! command -v patch >/dev/null 2>&1; then
+
+          echo
+          echo "Installing patch utility..."
+          echo
+
+
+          apt-get \
+            -o Acquire::http::Dl-Limit=25600 \
+            -o Acquire::https::Dl-Limit=25600 \
+            update -qq
+
+
+          DEBIAN_FRONTEND=noninteractive \
+          apt-get \
+            -o Acquire::http::Dl-Limit=25600 \
+            -o Acquire::https::Dl-Limit=25600 \
+            install \
+            -y \
+            -qq \
+            patch \
+            >/dev/null
+
+
+          rm -rf \
+            /var/lib/apt/lists/*
+
+        fi
+
+
+        #######################################################################
+        # RTX 5090 / SM120 PATCH STACK
+        #
+        # Reproducibility:
+        # - repo commit is pinned; never follows moving main
+        # - vLLM source is pinned to tag v0.28.0
+        # - Python diffs patch pristine source, then patched files are copied
+        #   into the installed package
+        #######################################################################
+
+        if [ ! -f /opt/vllm-sm12x/.PATCHED_OK ]; then
+
+          echo
+          echo "======================================================================"
+          echo " INSTALLING RTX 5090 SM120 PATCH STACK"
+          echo "======================================================================"
+          echo
+
+
+          rm -rf \
+            /opt/qwen5090-repo \
+            /opt/vllm-src \
+            /opt/vllm-sm12x \
+            /tmp/qwen5090-pinned.tar.gz \
+            /tmp/vllm-v0280.tar.gz
+
+
+          #####################################################################
+          # DOWNLOAD PATCH SOURCES
+          #
+          # SERIAL + 25 MiB/s
+          #####################################################################
+
+          python3 - <<'PY'
+
         import os
         import time
+        import tarfile
+        import shutil
+
         from pathlib import Path
-        from urllib.parse import quote
 
         import requests
-        from huggingface_hub import HfApi
 
-        repo = os.environ["MODEL_REPO"]
-        root = Path(os.environ["MODEL_DIR"])
 
-        token = os.environ.get("HF_TOKEN") or None
-
-        rate = int(
+        RATE = int(
             os.environ.get(
                 "DOWNLOAD_LIMIT_BPS",
                 "26214400",
             )
         )
 
-        root.mkdir(
-            parents=True,
-            exist_ok=True,
+
+        PROGRESS_INTERVAL = float(
+            os.environ.get(
+                "DOWNLOAD_PROGRESS_INTERVAL_SEC",
+                "2",
+            )
         )
 
-        api = HfApi(
-            token=token,
-        )
 
-        print(
-            f"Inspecting Hugging Face repository: {repo}",
-            flush=True,
-        )
+        def format_eta(seconds):
+            if seconds is None:
+                return "?"
+            seconds = max(0, int(seconds))
+            minutes, seconds = divmod(seconds, 60)
+            hours, minutes = divmod(minutes, 60)
+            if hours:
+                return f"{hours:d}h{minutes:02d}m{seconds:02d}s"
+            if minutes:
+                return f"{minutes:d}m{seconds:02d}s"
+            return f"{seconds:d}s"
 
-        info = api.model_info(
-            repo_id=repo,
-            files_metadata=True,
-        )
 
-        files = list(
-            info.siblings or []
-        )
+        def download(
+            url,
+            destination,
+        ):
 
-        print(
-            f"Repository contains {len(files)} files.",
-            flush=True,
-        )
-
-        print(
-            f"Download limit: "
-            f"{rate / 1024 / 1024:.1f} MiB/s",
-            flush=True,
-        )
-
-        auth_headers = {}
-
-        if token:
-            auth_headers["Authorization"] = (
-                f"Bearer {token}"
+            destination = Path(
+                destination
             )
 
-        for item in files:
 
-            rel = item.rfilename
-
-            expected = getattr(
-                item,
-                "size",
-                None,
+            print(
+                f"GET: {url}",
+                flush=True,
             )
 
-            dst = root / rel
-
-            part = Path(
-                str(dst) + ".part"
-            )
-
-            dst.parent.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
-
-            ##################################################################
-            # IMPORTANT
-            #
-            # chat_template.jinja is intentionally modified locally for
-            # Claude/Anthropic compatibility.
-            #
-            # Its local size therefore differs from the HF original.
-            # Preserve the local patched version on restart.
-            ##################################################################
-
-            if (
-                rel == "chat_template.jinja"
-                and dst.exists()
-            ):
-
-                print(
-                    "SKIP: chat_template.jinja "
-                    "(local compatibility patch preserved)",
-                    flush=True,
-                )
-
-                continue
-
-            ##################################################################
-            # EXISTING COMPLETE FILE
-            ##################################################################
-
-            if dst.exists():
-
-                if (
-                    expected is None
-                    or dst.stat().st_size == expected
-                ):
-
-                    print(
-                        f"SKIP: {rel}",
-                        flush=True,
-                    )
-
-                    continue
-
-                print(
-                    f"Existing file size is wrong; "
-                    f"replacing: {rel}",
-                    flush=True,
-                )
-
-                dst.unlink()
-
-            ##################################################################
-            # RESUME OFFSET
-            ##################################################################
-
-            offset = (
-                part.stat().st_size
-                if part.exists()
-                else 0
-            )
-
-            encoded = quote(
-                rel,
-                safe="/",
-            )
-
-            url = (
-                f"https://huggingface.co/"
-                f"{repo}/resolve/main/"
-                f"{encoded}?download=true"
-            )
-
-            headers = dict(
-                auth_headers
-            )
-
-            if offset > 0:
-
-                headers["Range"] = (
-                    f"bytes={offset}-"
-                )
-
-                print(
-                    f"RESUME: {rel} at "
-                    f"{offset / 1024 / 1024:.1f} MiB",
-                    flush=True,
-                )
-
-            else:
-
-                print(
-                    f"GET: {rel}",
-                    flush=True,
-                )
-
-            ##################################################################
-            # DOWNLOAD
-            ##################################################################
 
             response = requests.get(
                 url,
-                headers=headers,
                 stream=True,
-                allow_redirects=True,
                 timeout=(30, 300),
             )
 
-            ##################################################################
-            # RANGE NOT HONORED
-            ##################################################################
-
-            if (
-                offset > 0
-                and response.status_code != 206
-            ):
-
-                print(
-                    f"Server refused resume for {rel}; "
-                    f"restarting file.",
-                    flush=True,
-                )
-
-                response.close()
-
-                if part.exists():
-                    part.unlink()
-
-                offset = 0
-
-                response = requests.get(
-                    url,
-                    headers=auth_headers,
-                    stream=True,
-                    allow_redirects=True,
-                    timeout=(30, 300),
-                )
 
             response.raise_for_status()
 
-            mode = (
-                "ab"
-                if offset
-                else "wb"
+
+            total = int(
+                response.headers.get(
+                    "Content-Length",
+                    "0",
+                )
+                or 0
             )
 
             downloaded = 0
 
-            started = (
-                time.monotonic()
-            )
+            started = time.monotonic()
+            last_report = started
 
-            with open(
-                part,
-                mode,
+
+            if total:
+                print(
+                    f"DOWNLOAD START: {destination.name} "
+                    f"0.0 / {total / 1024 / 1024:.1f} MiB (0.0%)",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"DOWNLOAD START: {destination.name} "
+                    "(server did not provide total size)",
+                    flush=True,
+                )
+
+
+            with destination.open(
+                "wb"
             ) as handle:
 
                 for chunk in response.iter_content(
@@ -339,26 +621,28 @@ services:
                     if not chunk:
                         continue
 
+
                     handle.write(
                         chunk
                     )
+
 
                     downloaded += len(
                         chunk
                     )
 
-                    ##########################################################
-                    # 25 MiB/S BANDWIDTH LIMIT
-                    ##########################################################
 
                     target_elapsed = (
-                        downloaded / rate
+                        downloaded
+                        / RATE
                     )
+
 
                     actual_elapsed = (
                         time.monotonic()
                         - started
                     )
+
 
                     if (
                         target_elapsed
@@ -370,56 +654,1443 @@ services:
                             - actual_elapsed
                         )
 
+
+                    now = time.monotonic()
+
+                    if (
+                        now - last_report >= PROGRESS_INTERVAL
+                        or (total and downloaded >= total)
+                    ):
+                        elapsed = max(now - started, 0.001)
+                        speed = downloaded / elapsed / 1024 / 1024
+
+                        if total:
+                            pct = min(100.0, downloaded * 100.0 / total)
+                            remaining = max(0, total - downloaded)
+                            eta = remaining / max(speed * 1024 * 1024, 1)
+                            print(
+                                f"DOWNLOAD: {destination.name} "
+                                f"{downloaded / 1024 / 1024:.1f} / "
+                                f"{total / 1024 / 1024:.1f} MiB "
+                                f"({pct:5.1f}%) "
+                                f"{speed:.1f} MiB/s ETA {format_eta(eta)}",
+                                flush=True,
+                            )
+                        else:
+                            print(
+                                f"DOWNLOAD: {destination.name} "
+                                f"{downloaded / 1024 / 1024:.1f} MiB "
+                                f"{speed:.1f} MiB/s",
+                                flush=True,
+                            )
+
+                        last_report = now
+
+
             response.close()
 
-            ##################################################################
-            # SIZE VALIDATION
-            ##################################################################
+
+            elapsed = max(
+                time.monotonic() - started,
+                0.001,
+            )
+
+            print(
+                f"DONE: {destination} "
+                f"({downloaded / 1024 / 1024:.1f} MiB, "
+                f"{downloaded / elapsed / 1024 / 1024:.1f} MiB/s)",
+                flush=True,
+            )
+
+
+        patch_commit = os.environ[
+            "PATCH_REPO_COMMIT"
+        ]
+
+        print(
+            f"Pinned patch commit: {patch_commit}",
+            flush=True,
+        )
+
+        download(
+            "https://github.com/"
+            "adrienbrault/"
+            "qwen3.8-27b-rtx5090/"
+            f"archive/{patch_commit}.tar.gz",
+            "/tmp/qwen5090-pinned.tar.gz",
+        )
+
+
+        download(
+            "https://github.com/"
+            "vllm-project/vllm/"
+            "archive/refs/tags/v0.28.0.tar.gz",
+            "/tmp/vllm-v0280.tar.gz",
+        )
+
+
+        print(
+            "Extracting patch sources...",
+            flush=True,
+        )
+
+
+        with tarfile.open(
+            "/tmp/qwen5090-pinned.tar.gz",
+            "r:gz",
+        ) as archive:
+
+            archive.extractall(
+                "/tmp"
+            )
+
+
+        with tarfile.open(
+            "/tmp/vllm-v0280.tar.gz",
+            "r:gz",
+        ) as archive:
+
+            archive.extractall(
+                "/tmp"
+            )
+
+
+        candidates = sorted(
+            Path("/tmp").glob(
+                "qwen3.8-27b-rtx5090-*"
+            )
+        )
+
+        candidates = [
+            path
+            for path in candidates
+            if path.is_dir()
+        ]
+
+        if len(candidates) != 1:
+
+            raise RuntimeError(
+                "Expected exactly one extracted patch source, "
+                f"found: {candidates}"
+            )
+
+        qsrc = candidates[0]
+
+
+        vsrc = Path(
+            "/tmp/vllm-0.28.0"
+        )
+
+
+        if not qsrc.exists():
+
+            raise RuntimeError(
+                f"Patch source missing: {qsrc}"
+            )
+
+
+        if not vsrc.exists():
+
+            raise RuntimeError(
+                f"vLLM source missing: {vsrc}"
+            )
+
+
+        shutil.move(
+            str(qsrc),
+            "/opt/qwen5090-repo",
+        )
+
+
+        shutil.move(
+            str(vsrc),
+            "/opt/vllm-src",
+        )
+
+
+        print(
+            "Patch sources ready.",
+            flush=True,
+        )
+
+        print(
+            f"Patch source commit: {patch_commit}",
+            flush=True,
+        )
+
+        PY
+
+
+          P="/opt/qwen5090-repo/patches-v0280"
+
+
+          if [ ! -d "$${P}" ]; then
+
+            echo
+            echo "FATAL: patches-v0280 not found."
+            echo
+
+            exit 80
+
+          fi
+
+
+          #####################################################################
+          # EXACT PATCH FUNCTION
+          #
+          # All vLLM Python diffs are now applied to a pristine, pinned
+          # v0.28.0 source tree instead of directly to the installed wheel.
+          # This removes the package-layout/context mismatch that caused 0101
+          # to fail repeatedly. Fuzz is disabled and failures print full output.
+          #####################################################################
+
+          apply_patch_exact() {
+
+            TARGET="$$1"
+            DIFF="$$2"
+
+            echo
+            echo "Patch (exact): $${DIFF}"
+            echo "Target       : $${TARGET}"
+
+            PATCH_LOG="$${LOG_DIR}/patch-$$(basename "$${DIFF}").$${RUN_ID}.log"
+
+            set +e
+
+            patch               --batch               --forward               --fuzz=0               -p1               -d "$${TARGET}"               < "$${DIFF}"               > >(tee "$${PATCH_LOG}")               2>&1
+
+            RC=$$?
+
+            set -e
+
+            if [ "$${RC}" -eq 0 ]; then
+              echo "Patch applied cleanly."
+              return 0
+            fi
+
+            echo
+            echo "======================================================================"
+            echo " FATAL: EXACT PATCH FAILED"
+            echo "======================================================================"
+            echo "Target : $${TARGET}"
+            echo "Diff   : $${DIFF}"
+            echo "Log    : $${PATCH_LOG}"
+            echo "Exit   : $${RC}"
+            echo
+            echo "Last 120 patch-log lines:"
+            tail -120 "$${PATCH_LOG}" || true
+            echo
+            echo "No restart-loop ambiguity: this is a deterministic pinned-source failure."
+            echo
+
+            exit 81
+          }
+
+
+          #####################################################################
+          # PYTORCH SHADOW HEADER
+          #####################################################################
+
+          TINC="$$(
+
+            python3 - <<'PY'
+
+        import os
+        import torch
+
+
+        print(
+            os.path.join(
+                os.path.dirname(
+                    torch.__file__
+                ),
+                "include",
+            )
+        )
+
+        PY
+
+          )"
+
+
+          if grep \
+            -q \
+            "auto strptr = new std::string" \
+            "$${TINC}/torch/csrc/stable/stableivalue_conversions.h"; then
+
+
+            mkdir \
+              -p \
+              /opt/vllm-sm12x/shadow-include/torch/csrc/stable
+
+
+            cp \
+              "$${TINC}/torch/csrc/stable/stableivalue_conversions.h" \
+              /opt/vllm-sm12x/shadow-include/torch/csrc/stable/
+
+
+            apply_patch_exact \
+              "/opt/vllm-sm12x/shadow-include" \
+              "/opt/vllm-src/cmake/patches/pytorch_stable_string.patch"
+
+          fi
+
+
+          #####################################################################
+          # NVFP4 LINEAR V-SCALE WRITER
+          #####################################################################
+
+          apply_patch_exact \
+            "/opt/vllm-src" \
+            "$${P}/0102-nvfp4-writer-linear-vscale-sm12x-v0280.diff"
+
+
+          grep \
+            -q \
+            "swizzle_v_sf" \
+            /opt/vllm-src/csrc/libtorch_stable/nvfp4_kv_cache_kernels.cu
+
+
+          #####################################################################
+          # COPY SM120 OVERLAY
+          #####################################################################
+
+          mkdir \
+            -p \
+            /opt/vllm-sm12x
+
+
+          cp \
+            -a \
+            "$${P}/overlay/." \
+            /opt/vllm-sm12x/
+
+
+          export \
+            VLLM_SM12X_SHADOW_INC=/opt/vllm-sm12x/shadow-include
+
+
+          export \
+            VLLM_SM12X_CSRC=/opt/vllm-src/csrc
+
+
+          export \
+            VLLM_SM12X_BUILD=/opt/vllm-sm12x/build
+
+
+          export \
+            VLLM_SM12X_ARCH=120a
+
+
+          export \
+            PYTHONPATH="/opt/vllm-sm12x:$${PYTHONPATH:-}"
+
+
+          export \
+            TORCH_CUDA_ARCH_LIST="12.0a"
+
+
+          export \
+            MAX_JOBS=4
+
+
+          if ! command \
+            -v \
+            nvcc \
+            >/dev/null 2>&1; then
+
+            export \
+              PATH="/usr/local/cuda/bin:$${PATH}"
+
+          fi
+
+
+          echo
+          echo "CUDA compiler:"
+          echo
+
+
+          nvcc \
+            --version \
+            | tail -1
+
+
+          echo
+
+
+          cd \
+            /opt/vllm-sm12x
+
+
+          python3 \
+            build_overlay.py
+
+
+          test \
+            -f \
+            /opt/vllm-sm12x/build/vllm_sm12x_nvfp4kv.so
+
+
+          #####################################################################
+          # PATCH PRISTINE vLLM v0.28.0 SOURCE, THEN INSTALL TO RUNTIME PACKAGE
+          #
+          # IMPORTANT:
+          # We intentionally do NOT patch /usr/local/lib/.../vllm directly.
+          # The installed wheel/package can differ slightly from the source
+          # contexts used to author the patch stack, which is what caused the
+          # previous 0101 restart loop.
+          #
+          # Instead:
+          #   1. apply every Python patch exactly to /opt/vllm-src/vllm
+          #   2. discover every file touched by those diffs
+          #   3. copy the resulting patched files into the installed package
+          #   4. py_compile + semantic assertions before serving
+          #####################################################################
+
+          # Resolve site-packages WITHOUT importing vLLM.
+          #
+          # With DEBUG logging enabled, importing vllm emits platform-detection
+          # messages to stdout. Using that import inside command substitution
+          # polluted VROOT with the debug log plus the real path.
+          #
+          # sysconfig is stdlib-only and produces exactly one clean path.
+          VROOT="$$(python3 -c 'import os, sysconfig; print(os.path.join(sysconfig.get_paths()["purelib"], "vllm"))')"
+
+          if [ ! -d "$${VROOT}" ]; then
+            echo "FATAL: resolved vLLM package path does not exist: $${VROOT}"
+            exit 82
+          fi
+
+          if [ ! -f "$${VROOT}/__init__.py" ]; then
+            echo "FATAL: resolved path is not a vLLM package: $${VROOT}"
+            exit 83
+          fi
+
+          echo
+          echo "Installed vLLM package:"
+          printf '%s\n' "$${VROOT}"
+          echo
+          echo "Pinned patch commit:"
+          echo "$${PATCH_REPO_COMMIT}"
+          echo
+
+
+          # ReplaySSM speculative-state patch 0111 is intentionally omitted.
+          #
+          # It is a separate opt-in speculative state-cache architecture that
+          # requires mamba_cache_mode=none. This serving profile uses
+          # mamba-cache-mode=align and MTP speculative decoding, so applying
+          # 0111 is both unnecessary and incompatible with the intended path.
+          #
+          # 0112 is retained: it accelerates uniform SM120 NVFP4 speculative
+          # verification through XQA and is directly relevant to MTP.
+          echo "ReplaySSM-spec patch : SKIPPED (not used by MTP / incompatible with align mode)"
+
+          PY_PATCHES=(
+
+            "0101-sm120-nvfp4kv-fa2-routing-v0280.diff"
+            "0103-sm120-nvfp4-xqa-decode-v0280.diff"
+            "0104-mtp-drafter-full-cudagraph-v0280.diff"
+            "0105-dflash-noncausal-nvfp4-fa2-v0280.diff"
+            "0106-dflash2-selector-sampling-v0280.diff"
+            "0107-dflash-quantized-draft-loader.diff"
+            "0108-gdn-kernels-v0280.diff"
+            "0109-dflash-noncausal-complete-v0280.diff"
+            "0112-xqa-verify-v0280.diff"
+            "0113-dflash-speculator-graphs-v0280.diff"
+
+          )
+
+
+          echo
+          echo "======================================================================"
+          echo " PATCHING PRISTINE vLLM v0.28.0 SOURCE"
+          echo "======================================================================"
+          echo
+
+
+          for PATCH_NAME in "$${PY_PATCHES[@]}"; do
+
+            apply_patch_exact               "/opt/vllm-src/vllm"               "$${P}/$${PATCH_NAME}"
+
+          done
+
+
+          echo
+          echo "======================================================================"
+          echo " COPYING PATCHED SOURCE FILES INTO INSTALLED vLLM PACKAGE"
+          echo "======================================================================"
+          echo
+
+
+          export VROOT
+          export PATCH_DIR="$${P}"
+
+          python3 - <<'PY'
+
+        import os
+        import shutil
+        from pathlib import Path
+
+        source_root = Path(
+            "/opt/vllm-src/vllm"
+        )
+
+        runtime_root = Path(
+            os.environ[
+                "VROOT"
+            ]
+        )
+
+        patch_dir = Path(
+            os.environ[
+                "PATCH_DIR"
+            ]
+        )
+
+        patch_names = [
+            "0101-sm120-nvfp4kv-fa2-routing-v0280.diff",
+            "0103-sm120-nvfp4-xqa-decode-v0280.diff",
+            "0104-mtp-drafter-full-cudagraph-v0280.diff",
+            "0105-dflash-noncausal-nvfp4-fa2-v0280.diff",
+            "0106-dflash2-selector-sampling-v0280.diff",
+            "0107-dflash-quantized-draft-loader.diff",
+            "0108-gdn-kernels-v0280.diff",
+            "0109-dflash-noncausal-complete-v0280.diff",
+            "0112-xqa-verify-v0280.diff",
+            "0113-dflash-speculator-graphs-v0280.diff",
+        ]
+
+        touched = set()
+
+        for patch_name in patch_names:
+
+            patch_path = (
+                patch_dir
+                / patch_name
+            )
+
+            for line in patch_path.read_text(
+                encoding="utf-8",
+                errors="replace",
+            ).splitlines():
+
+                if not line.startswith(
+                    "+++ b/"
+                ):
+                    continue
+
+                relative = line[
+                    len("+++ b/"):
+                ].split(
+                    "\t",
+                    1,
+                )[0].strip()
+
+                if (
+                    not relative
+                    or relative == "/dev/null"
+                ):
+                    continue
+
+                touched.add(
+                    relative
+                )
+
+        if not touched:
+
+            raise RuntimeError(
+                "No patched runtime files discovered."
+            )
+
+        copied = []
+
+        for relative in sorted(
+            touched
+        ):
+
+            src = (
+                source_root
+                / relative
+            )
+
+            dst = (
+                runtime_root
+                / relative
+            )
+
+            if not src.exists():
+
+                raise RuntimeError(
+                    "Patched source file missing: "
+                    f"{src}"
+                )
+
+            if not src.is_file():
+
+                raise RuntimeError(
+                    "Expected patched regular file: "
+                    f"{src}"
+                )
+
+            dst.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            shutil.copy2(
+                src,
+                dst,
+            )
+
+            copied.append(
+                relative
+            )
+
+            print(
+                f"INSTALLED PATCHED FILE: {relative}",
+                flush=True,
+            )
+
+        print()
+        print(
+            f"Patched runtime files installed: {len(copied)}",
+            flush=True,
+        )
+
+        PY
+
+
+          #####################################################################
+          # NORMALIZE vLLM PLATFORM FAMILY SEMANTICS
+          #
+          # patches-v0280 relies on is_device_capability_family(120).
+          # Use the exact v0.28.0 helper from the same source tree that the
+          # SM120 patches were applied against.
+          #####################################################################
+
+          echo "SM120 normalization source: /opt/vllm-src/vllm/platforms/interface.py"
+          echo "SM120 normalization target: $${VROOT}/platforms/interface.py"
+
+          case "$${VROOT}" in
+            *$'\n'*|*"DEBUG "*|*"INFO "*|*"WARNING "*)
+              echo "FATAL: VROOT contains unexpected log text: [$${VROOT}]"
+              exit 84
+              ;;
+          esac
+
+          test -f /opt/vllm-src/vllm/platforms/interface.py
+          test -d "$${VROOT}/platforms"
+
+          cp -a \
+            /opt/vllm-src/vllm/platforms/interface.py \
+            "$${VROOT}/platforms/interface.py"
+
+          test -f "$${VROOT}/platforms/interface.py"
+
+          find \
+            "$${VROOT}/platforms" \
+            "$${VROOT}/v1/attention/backends" \
+            -type f \
+            -name '*.pyc' \
+            -delete \
+            2>/dev/null \
+            || true
+
+          echo "vLLM platform family helper normalized to v0.28.0 source."
+
+
+          #####################################################################
+          # FAIL-FAST SM120 + FLASHINFER + NVFP4 PREFLIGHT
+          #####################################################################
+
+          python3 - <<'PY'
+
+        import inspect
+        import torch
+
+        from vllm.platforms import current_platform
+        from vllm.v1.attention.backends.flashinfer import FlashInferBackend
+
+        torch_cap = torch.cuda.get_device_capability()
+        vllm_cap = current_platform.get_device_capability()
+        family120 = current_platform.is_device_capability_family(120)
+        nvfp4_ok = FlashInferBackend.supports_kv_cache_dtype("nvfp4")
+
+        print()
+        print("============================================================")
+        print(" SM120 / FLASHINFER / NVFP4 PREFLIGHT")
+        print("============================================================")
+        print(f"torch CUDA capability        : {torch_cap}")
+        print(f"vLLM device capability       : {vllm_cap}")
+        print(f"SM120 family check           : {family120}")
+        print(f"FlashInfer NVFP4 KV support  : {nvfp4_ok}")
+        print(f"FlashInfer implementation    : {inspect.getsourcefile(FlashInferBackend)}")
+        print(f"Platform implementation      : {inspect.getsourcefile(type(current_platform))}")
+        print("============================================================")
+
+        if torch_cap[0] != 12:
+            raise RuntimeError(
+                f"Expected RTX 5090 / SM12x, got torch capability {torch_cap}."
+            )
+
+        if vllm_cap is None or vllm_cap.major != 12:
+            raise RuntimeError(
+                f"vLLM did not resolve the GPU as SM12x: {vllm_cap!r}"
+            )
+
+        if not family120:
+            raise RuntimeError(
+                "is_device_capability_family(120) is FALSE on the RTX 5090."
+            )
+
+        if not nvfp4_ok:
+            raise RuntimeError(
+                "FlashInferBackend still rejects NVFP4 KV on SM120."
+            )
+
+        print("PREFLIGHT PASS: SM120 + FlashInfer + NVFP4 KV")
+        print()
+
+        PY
+
+
+          #####################################################################
+          # VALIDATE PATCHES
+          #####################################################################
+
+          python3 \
+            -m \
+            py_compile \
+            "$${VROOT}/v1/attention/backends/flashinfer.py"
+
+
+          python3 \
+            -m \
+            py_compile \
+            "$${VROOT}/v1/worker/gpu_worker.py"
+
+
+          python3 \
+            -m \
+            py_compile \
+            "$${VROOT}/v1/spec_decode/llm_base_proposer.py"
+
+
+          python3 \
+            -m \
+            py_compile \
+            "$${VROOT}/v1/worker/gpu_model_runner.py"
+
+
+          python3 \
+            -m \
+            py_compile \
+            "$${VROOT}/v1/attention/backends/gdn_attn.py"
+
+
+          python3 \
+            -m \
+            py_compile \
+            "$${VROOT}/model_executor/layers/mamba/gdn/qwen_gdn_linear_attn.py"
+
+
+          grep \
+            -q \
+            "use_fa2_nvfp4_kv" \
+            "$${VROOT}/v1/attention/backends/flashinfer.py"
+
+
+          touch \
+            /opt/vllm-sm12x/.PATCHED_OK
+
+
+          echo
+          echo "======================================================================"
+          echo " SM120 PATCH STACK INSTALLED"
+          echo "======================================================================"
+          echo
+
+
+        else
+
+
+          echo
+          echo "SM120 patch stack already installed in this container."
+          echo "Patch commit: $$(cat /opt/vllm-sm12x/.PATCH_COMMIT 2>/dev/null || echo unknown)"
+          echo
+
+
+        fi
+
+
+        if [ ! -f /opt/vllm-sm12x/.PATCHED_OK ]; then
+          echo "FATAL: patch completion marker missing."
+          exit 82
+        fi
+
+        if [ -f /opt/vllm-sm12x/.PATCH_COMMIT ]; then
+
+          INSTALLED_PATCH_COMMIT="$$(cat /opt/vllm-sm12x/.PATCH_COMMIT)"
+
+          if [ "$${INSTALLED_PATCH_COMMIT}" != "$${PATCH_REPO_COMMIT}" ]; then
+            echo "FATAL: installed patch commit mismatch."
+            echo "Expected: $${PATCH_REPO_COMMIT}"
+            echo "Found   : $${INSTALLED_PATCH_COMMIT}"
+            exit 83
+          fi
+
+        fi
+
+
+        #######################################################################
+        # SM120 RUNTIME ENVIRONMENT
+        #######################################################################
+
+        export \
+          VLLM_SM12X_SHADOW_INC=/opt/vllm-sm12x/shadow-include
+
+
+        export \
+          VLLM_SM12X_CSRC=/opt/vllm-src/csrc
+
+
+        export \
+          VLLM_SM12X_BUILD=/opt/vllm-sm12x/build
+
+
+        export \
+          VLLM_SM12X_ARCH=120a
+
+
+        export \
+          PYTHONPATH="/opt/vllm-sm12x:$${PYTHONPATH:-}"
+
+
+        #######################################################################
+        # VERIFY NVFP4 OVERLAY
+        #######################################################################
+
+        python3 - <<'PY'
+
+        import torch
+
+
+        so = (
+            "/opt/vllm-sm12x/build/"
+            "vllm_sm12x_nvfp4kv.so"
+        )
+
+
+        torch.ops.load_library(
+            so
+        )
+
+
+        if not hasattr(
+            torch.ops.vllm_sm12x,
+            "reshape_and_cache_nvfp4",
+        ):
+
+            raise RuntimeError(
+                "SM120 NVFP4 KV overlay operation is missing."
+            )
+
+
+        print(
+            "SM120 NVFP4 KV overlay: VERIFIED",
+            flush=True,
+        )
+
+        PY
+
+
+        #######################################################################
+        # GPU STATUS
+        #######################################################################
+
+        echo
+        echo "======================================================================"
+        echo " GPU STATUS"
+        echo "======================================================================"
+        echo
+
+
+        nvidia-smi
+
+
+        echo
+
+
+        if ! nvidia-smi \
+          -L \
+          | grep \
+          -qiE \
+          "5090|GeForce RTX 5090"; then
+
+
+          echo
+          echo "FATAL: RTX 5090 not detected."
+          echo
+
+
+          exit 90
+
+        fi
+
+
+        #######################################################################
+        # PERSISTENT GPU TELEMETRY
+        #
+        # Linux/CUDA-visible telemetry every second. WDDM Shared GPU Memory is
+        # a Windows host counter and is not directly exposed in this container.
+        #######################################################################
+
+        GPU_TELEMETRY_FILE="$${LOG_DIR}/gpu-telemetry-$${RUN_ID}.csv"
+        echo "timestamp,util_gpu_pct,util_mem_pct,memory_used_mib,memory_free_mib,power_w,temp_c,sm_clock_mhz,mem_clock_mhz,pstate,pcie_gen,pcie_width" > "$${GPU_TELEMETRY_FILE}"
+
+        (
+          while true; do
+            nvidia-smi \
+              --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,memory.free,power.draw,temperature.gpu,clocks.sm,clocks.mem,pstate,pcie.link.gen.current,pcie.link.width.current \
+              --format=csv,noheader,nounits \
+              >> "$${GPU_TELEMETRY_FILE}" \
+              2>> "$${LOG_DIR}/gpu-telemetry-errors-$${RUN_ID}.log" \
+              || true
+            sleep "$${GPU_TELEMETRY_INTERVAL_SEC}"
+          done
+        ) &
+
+        echo "GPU telemetry log    : $${GPU_TELEMETRY_FILE}"
+
+
+        #######################################################################
+        # PERSISTENT SYSTEM MEMORY TELEMETRY
+        #######################################################################
+
+        SYSTEM_TELEMETRY_FILE="$${LOG_DIR}/system-memory-$${RUN_ID}.log"
+        (
+          while true; do
+            printf '%s ' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$${SYSTEM_TELEMETRY_FILE}"
+            grep -E '^(MemTotal|MemAvailable|SwapTotal|SwapFree):' /proc/meminfo \
+              | tr '\n' ' ' >> "$${SYSTEM_TELEMETRY_FILE}"
+            printf '\n' >> "$${SYSTEM_TELEMETRY_FILE}"
+            sleep "$${SYSTEM_TELEMETRY_INTERVAL_SEC}"
+          done
+        ) &
+
+        echo "System memory log    : $${SYSTEM_TELEMETRY_FILE}"
+
+
+        #######################################################################
+        # MODEL DIRECTORIES
+        #######################################################################
+
+        mkdir \
+          -p \
+          "$${MODEL_DIR}"
+
+
+        mkdir \
+          -p \
+          "$${HF_HOME}"
+
+
+        #######################################################################
+        # MODEL DOWNLOAD
+        #
+        # SERIAL
+        # RESUMABLE
+        # 25 MiB/sec aggregate maximum
+        #######################################################################
+
+        python3 - <<'PY'
+
+        import os
+        import time
+
+        from pathlib import Path
+
+        from urllib.parse import quote
+
+        import requests
+
+        from huggingface_hub import HfApi
+
+
+        repo = os.environ[
+            "MODEL_REPO"
+        ]
+
+
+        root = Path(
+            os.environ[
+                "MODEL_DIR"
+            ]
+        )
+
+
+        token = (
+            os.environ.get(
+                "HF_TOKEN"
+            )
+            or None
+        )
+
+
+        rate = int(
+            os.environ.get(
+                "DOWNLOAD_LIMIT_BPS",
+                "26214400",
+            )
+        )
+
+
+        progress_interval = float(
+            os.environ.get(
+                "DOWNLOAD_PROGRESS_INTERVAL_SEC",
+                "2",
+            )
+        )
+
+
+        def format_eta(seconds):
+            if seconds is None:
+                return "?"
+            seconds = max(0, int(seconds))
+            minutes, seconds = divmod(seconds, 60)
+            hours, minutes = divmod(minutes, 60)
+            if hours:
+                return f"{hours:d}h{minutes:02d}m{seconds:02d}s"
+            if minutes:
+                return f"{minutes:d}m{seconds:02d}s"
+            return f"{seconds:d}s"
+
+
+        root.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+
+        api = HfApi(
+            token=token
+        )
+
+
+        revision = os.environ.get(
+            "MODEL_REVISION",
+            "main",
+        )
+
+        info = api.model_info(
+            repo_id=repo,
+            revision=revision,
+            files_metadata=True,
+        )
+
+
+        files = list(
+            info.siblings
+            or []
+        )
+
+
+        print(
+            f"Repository: {repo}",
+            flush=True,
+        )
+
+        print(
+            f"Revision  : {revision}",
+            flush=True,
+        )
+
+
+        print(
+            "Download limit: "
+            f"{rate / 1024 / 1024:.1f} MiB/s",
+            flush=True,
+        )
+
+
+        auth_headers = {}
+
+
+        if token:
+
+            auth_headers[
+                "Authorization"
+            ] = (
+                f"Bearer {token}"
+            )
+
+
+        for item in files:
+
+            rel = (
+                item.rfilename
+            )
+
+
+            expected = getattr(
+                item,
+                "size",
+                None,
+            )
+
+
+            dst = (
+                root
+                / rel
+            )
+
+
+            part = Path(
+                str(dst)
+                + ".part"
+            )
+
+
+            dst.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+
+            # ---------------------------------------------------------------
+            # Preserve our locally patched chat template.
+            # ---------------------------------------------------------------
+
+            if (
+                rel
+                == "chat_template.jinja"
+                and dst.exists()
+            ):
+
+                print(
+                    "SKIP: chat_template.jinja "
+                    "(local patch preserved)",
+                    flush=True,
+                )
+
+                continue
+
+
+            # ---------------------------------------------------------------
+            # Already complete.
+            # ---------------------------------------------------------------
+
+            if dst.exists():
+
+                if (
+                    expected is None
+                    or dst.stat().st_size
+                    == expected
+                ):
+
+                    print(
+                        f"SKIP: {rel}",
+                        flush=True,
+                    )
+
+                    continue
+
+
+                print(
+                    f"REPLACE: {rel}",
+                    flush=True,
+                )
+
+
+                dst.unlink()
+
+
+            # ---------------------------------------------------------------
+            # Resume partial file.
+            # ---------------------------------------------------------------
+
+            offset = (
+                part.stat().st_size
+                if part.exists()
+                else 0
+            )
+
+
+            encoded = quote(
+                rel,
+                safe="/",
+            )
+
+
+            url = (
+                "https://huggingface.co/"
+                f"{repo}/resolve/{revision}/"
+                f"{encoded}?download=true"
+            )
+
+
+            headers = dict(
+                auth_headers
+            )
+
+
+            if offset:
+
+                headers[
+                    "Range"
+                ] = (
+                    f"bytes={offset}-"
+                )
+
+
+                print(
+                    f"RESUME: {rel} @ "
+                    f"{offset / 1024 / 1024:.1f} MiB",
+                    flush=True,
+                )
+
+
+            else:
+
+                print(
+                    f"GET: {rel}",
+                    flush=True,
+                )
+
+
+            response = requests.get(
+                url,
+                headers=headers,
+                stream=True,
+                allow_redirects=True,
+                timeout=(30, 300),
+            )
+
+
+            # ---------------------------------------------------------------
+            # CDN did not honor Range.
+            # ---------------------------------------------------------------
+
+            if (
+                offset
+                and response.status_code
+                != 206
+            ):
+
+                response.close()
+
+
+                if part.exists():
+
+                    part.unlink()
+
+
+                offset = 0
+
+
+                response = requests.get(
+                    url,
+                    headers=auth_headers,
+                    stream=True,
+                    allow_redirects=True,
+                    timeout=(30, 300),
+                )
+
+
+            response.raise_for_status()
+
+
+            mode = (
+                "ab"
+                if offset
+                else "wb"
+            )
+
+
+            downloaded = 0
+
+            started = time.monotonic()
+            last_report = started
+
+            # "offset" is bytes already present in a resumable .part file.
+            if expected is not None:
+                completed = offset
+                pct = min(100.0, completed * 100.0 / max(expected, 1))
+                print(
+                    f"DOWNLOAD START: {rel} "
+                    f"{completed / 1024 / 1024:.1f} / "
+                    f"{expected / 1024 / 1024:.1f} MiB "
+                    f"({pct:5.1f}%)",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"DOWNLOAD START: {rel} "
+                    f"from {offset / 1024 / 1024:.1f} MiB",
+                    flush=True,
+                )
+
+
+            with open(
+                part,
+                mode,
+            ) as handle:
+
+
+                for chunk in response.iter_content(
+                    chunk_size=1024 * 1024
+                ):
+
+
+                    if not chunk:
+
+                        continue
+
+
+                    handle.write(
+                        chunk
+                    )
+
+
+                    downloaded += len(
+                        chunk
+                    )
+
+
+                    target_elapsed = (
+                        downloaded
+                        / rate
+                    )
+
+
+                    actual_elapsed = (
+                        time.monotonic()
+                        - started
+                    )
+
+
+                    if (
+                        target_elapsed
+                        > actual_elapsed
+                    ):
+
+                        time.sleep(
+                            target_elapsed
+                            - actual_elapsed
+                        )
+
+
+                    now = time.monotonic()
+
+                    if (
+                        now - last_report >= progress_interval
+                        or (
+                            expected is not None
+                            and offset + downloaded >= expected
+                        )
+                    ):
+                        elapsed = max(now - started, 0.001)
+                        speed = downloaded / elapsed / 1024 / 1024
+                        completed = offset + downloaded
+
+                        if expected is not None:
+                            pct = min(
+                                100.0,
+                                completed * 100.0 / max(expected, 1),
+                            )
+                            remaining = max(0, expected - completed)
+                            eta = remaining / max(
+                                speed * 1024 * 1024,
+                                1,
+                            )
+                            print(
+                                f"DOWNLOAD: {rel} "
+                                f"{completed / 1024 / 1024:.1f} / "
+                                f"{expected / 1024 / 1024:.1f} MiB "
+                                f"({pct:5.1f}%) "
+                                f"{speed:.1f} MiB/s "
+                                f"ETA {format_eta(eta)}",
+                                flush=True,
+                            )
+                        else:
+                            print(
+                                f"DOWNLOAD: {rel} "
+                                f"{completed / 1024 / 1024:.1f} MiB "
+                                f"{speed:.1f} MiB/s",
+                                flush=True,
+                            )
+
+                        last_report = now
+
+
+            response.close()
+
+
+            # ---------------------------------------------------------------
+            # Validate size.
+            # ---------------------------------------------------------------
 
             if expected is not None:
 
-                actual_size = (
+                actual = (
                     part.stat().st_size
                 )
 
-                if actual_size != expected:
+
+                if actual != expected:
 
                     raise RuntimeError(
                         f"Size mismatch for {rel}: "
-                        f"{actual_size} != {expected}"
+                        f"{actual} != {expected}"
                     )
 
-            ##################################################################
-            # PROMOTE PARTIAL DOWNLOAD
-            ##################################################################
 
             os.replace(
                 part,
                 dst,
             )
 
+
+            elapsed = max(
+                time.monotonic() - started,
+                0.001,
+            )
+
             print(
-                f"DONE: {rel}",
+                f"DONE: {rel} "
+                f"({(offset + downloaded) / 1024 / 1024:.1f} MiB total, "
+                f"{downloaded / elapsed / 1024 / 1024:.1f} MiB/s this run)",
                 flush=True,
             )
 
-        ######################################################################
-        # FINAL VALIDATION
-        ######################################################################
+
+        #######################################################################
+        # MODEL VALIDATION
+        #######################################################################
 
         required = [
-            root / "config.json",
-            root / "tokenizer_config.json",
-            root / "chat_template.jinja",
+
+            root
+            / "config.json",
+
+            root
+            / "tokenizer_config.json",
+
+            root
+            / "chat_template.jinja",
+
         ]
+
 
         for path in required:
 
             if not path.exists():
 
                 raise RuntimeError(
-                    f"Required file missing: {path}"
+                    f"Missing model file: {path}"
                 )
+
 
         tensors = list(
             root.rglob(
@@ -427,173 +2098,129 @@ services:
             )
         )
 
+
         if not tensors:
 
             raise RuntimeError(
-                "No safetensors files found "
-                "after download."
+                "No safetensors found."
             )
+
 
         print()
         print(
             "============================================================"
         )
         print(
-            " MODEL DOWNLOAD / VALIDATION COMPLETE"
+            " MODEL READY"
         )
         print(
             "============================================================"
         )
         print(
-            f"Safetensor files: {len(tensors)}"
+            f"Safetensors: {len(tensors)}"
         )
         print(
-            f"Model directory : {root}"
+            f"Directory  : {root}"
         )
         print(
             "============================================================"
         )
+
         PY
 
-        ######################################################################
-        # CLAUDE / ANTHROPIC COMPATIBILITY + HARD THINKING OFF
-        #
-        # Qwen3.8 normally enables thinking by default. Claude-style clients
-        # may also send reasoning_effort=high. We hard-force enable_thinking
-        # to false in the model chat template and still normalize high->xhigh
-        # for compatibility if a future request enables reasoning again.
-        ######################################################################
 
-        echo
-        echo "Patching Qwen3.8 template: THINKING OFF + high -> xhigh compatibility"
+        #######################################################################
+        # CLAUDE CODE CHAT TEMPLATE
+        #
+        # THINKING HARD OFF — V2
+        #
+        # Defense in depth:
+        #   1) Force enable_thinking=false INSIDE the Qwen Jinja template.
+        #   2) Force preserve_thinking=false so reasoning is never carried
+        #      forward from prior turns.
+        #   3) Start vLLM WITHOUT --reasoning-parser so Anthropic /v1/messages
+        #      cannot turn generated text into hidden Claude thinking blocks.
+        #######################################################################
 
         python3 - <<'PY'
+
+        import os
         from pathlib import Path
 
-        path = Path(
-            "/models/Qwen3.8-27B-Uncensored-NVFP4/chat_template.jinja"
+        path = Path(os.environ["MODEL_DIR"]) / "chat_template.jinja"
+        text = path.read_text(encoding="utf-8")
+
+        legacy_block = (
+            "{# LOCAL_FORCE_THINKING_OFF #}\n"
+            "{%- set enable_thinking = false %}\n"
         )
 
-        text = path.read_text()
-        changed = False
+        hard_block = (
+            "{# LOCAL_FORCE_THINKING_HARD_OFF_V2 #}\n"
+            "{%- set enable_thinking = false %}\n"
+            "{%- set preserve_thinking = false %}\n"
+        )
 
-        # Hard-disable thinking inside the Jinja template itself. This wins even
-        # if the client sends reasoning-related fields.
-        hard_off_marker = "{# LOCAL_FORCE_THINKING_OFF #}"
-        if hard_off_marker not in text:
-            needle = "{%- if not messages %}"
-            if needle not in text:
-                raise RuntimeError(
-                    "Could not locate chat-template insertion point for thinking-off patch"
-                )
-            replacement = (
-                hard_off_marker
-                + "\n{%- set enable_thinking = false %}"
-                + "\n"
-                + needle
+        # Normalize previous local injections. This matters because the model
+        # downloader intentionally preserves an existing locally patched
+        # chat_template.jinja across container redeploys.
+        text = text.replace(legacy_block, "")
+        text = text.replace(hard_block, "")
+
+        needle = "{%- if not messages %}"
+
+        if needle not in text:
+            raise RuntimeError(
+                "Unable to locate Qwen3.8 chat-template hard-off patch point."
             )
-            text = text.replace(needle, replacement, 1)
-            changed = True
-            print("Patched: enable_thinking forced to false")
-        else:
-            print("Thinking-off patch already present")
 
-        # Keep Claude/OpenAI 'high' effort compatible with Qwen's 'xhigh'.
-        compat_marker = "{# LOCAL_HIGH_TO_XHIGH #}"
-        if compat_marker not in text:
-            needle = (
-                "{%- set resolved_reasoning_effort = "
-                "reasoning_effort|default('xhigh') %}"
-            )
-            if needle in text:
-                replacement = (
-                    needle
-                    + "\n"
-                    + compat_marker
-                    + "\n{%- if resolved_reasoning_effort == 'high' %}"
-                    + "\n{%- set resolved_reasoning_effort = 'xhigh' %}"
-                    + "\n{%- endif %}"
-                )
-                text = text.replace(needle, replacement, 1)
-                changed = True
-                print("Patched: reasoning_effort high -> xhigh")
-            else:
-                # Thinking is hard-off, so this is non-fatal. Keep startup robust
-                # if a future upstream template changes the reasoning block.
-                print("NOTE: reasoning_effort initializer not found; thinking is still forced OFF")
-        else:
-            print("high -> xhigh compatibility patch already present")
+        text = text.replace(
+            needle,
+            hard_block + needle,
+            1,
+        )
 
-        if changed:
-            path.write_text(text)
-            print("Chat template updated")
-        else:
-            print("Chat template already fully patched")
+        # Fail closed. Do not launch a model that can silently fall back to
+        # thinking mode.
+        if "{%- set enable_thinking = false %}" not in text:
+            raise RuntimeError("enable_thinking hard-off injection failed.")
+
+        if "{%- set preserve_thinking = false %}" not in text:
+            raise RuntimeError("preserve_thinking hard-off injection failed.")
+
+        path.write_text(text, encoding="utf-8")
+
+        print("Chat template: THINKING HARD OFF V2")
+        print("  enable_thinking   = false")
+        print("  preserve_thinking = false")
+
         PY
 
-        ######################################################################
-        # EVERYTHING LOCAL AFTER CONTROLLED DOWNLOAD
-        ######################################################################
 
-        export HF_HUB_OFFLINE=1
-        export TRANSFORMERS_OFFLINE=1
+        #######################################################################
+        # OFFLINE AFTER CONTROLLED DOWNLOAD
+        #######################################################################
 
-        ######################################################################
-        # GPU STATUS
-        ######################################################################
+        export \
+          HF_HUB_OFFLINE=1
 
-        echo
-        echo "======================================================================"
-        echo " GPU STATUS BEFORE vLLM"
-        echo "======================================================================"
-        echo
 
-        nvidia-smi || true
+        export \
+          TRANSFORMERS_OFFLINE=1
 
-        ######################################################################
-        # CONFIGURATION SUMMARY
-        ######################################################################
 
-        echo
-        echo "======================================================================"
-        echo " STARTING vLLM"
-        echo "======================================================================"
-        echo
-        echo " Base URL      : http://0.0.0.0:8006/v1"
-        echo " OpenAI Chat   : http://0.0.0.0:8006/v1/chat/completions"
-        echo " Anthropic     : http://0.0.0.0:8006/v1/messages"
-        echo " Models        : http://0.0.0.0:8006/v1/models"
-        echo " Health        : http://0.0.0.0:8006/health"
-        echo " Metrics       : http://0.0.0.0:8006/metrics"
-        echo
-        echo " Model alias   : qwen3.8"
-        echo " Context       : 262144"
-        echo " Max sequences : 2"
-        echo
-        echo " Quantization  : ModelOpt NVFP4"
-        echo " KV cache      : FP8"
-        echo " KV allocation : fixed 8.5 GiB"
-        echo
-        echo " Batch tokens  : 8192"
-        echo " Attention     : FLASHINFER"
-        echo " Chunk prefill : ON"
-        echo " Prefix cache  : ON"
-        echo
-        echo " Spec decode   : OFF"
-        echo " Thinking      : HARD OFF"
-        echo " Reasoning map : high -> xhigh"
-        echo
-        echo " Vision        : OFF"
-        echo
-        echo "======================================================================"
-        echo
-
-        ######################################################################
-        # VLLM ARGUMENT ARRAY
-        ######################################################################
+        #######################################################################
+        # VLLM ARGUMENTS
+        #######################################################################
 
         VLLM_ARGS=(
+
           "$${MODEL_DIR}"
+
+
+          # ---------------------------------------------------------------
+          # API
+          # ---------------------------------------------------------------
 
           "--served-model-name"
           "qwen3.8"
@@ -604,71 +2231,348 @@ services:
           "--port"
           "8006"
 
+
+          # ---------------------------------------------------------------
+          # TEXT ONLY
+          # ---------------------------------------------------------------
+
           "--language-model-only"
 
+
+          # ---------------------------------------------------------------
+          # FULL CONTEXT
+          # ---------------------------------------------------------------
+
           "--max-model-len"
-          "262144"
+          "$${MAX_CONTEXT}"
+
+
+          # ---------------------------------------------------------------
+          # ONE CLAUDE-CODE ROUTER SLOT
+          # ---------------------------------------------------------------
 
           "--max-num-seqs"
-          "2"
+          "$${MAX_SEQS}"
+
+
+          # ---------------------------------------------------------------
+          # CHUNKED PREFILL
+          # ---------------------------------------------------------------
 
           "--max-num-batched-tokens"
-          "8192"
+          "$${PREFILL_BATCH}"
+
+
+          # ---------------------------------------------------------------
+          # NVFP4 4-BIT KV CACHE
+          # ---------------------------------------------------------------
 
           "--kv-cache-dtype"
-          "fp8"
+          "$${KV_DTYPE}"
+
+
+          # ---------------------------------------------------------------
+          # EXPLICIT WORKSTATION KV BUDGET
+          # ---------------------------------------------------------------
 
           "--kv-cache-memory-bytes"
-          "9126805504"
+          "$${KV_CACHE_MEMORY_BYTES}"
 
-          "--quantization"
-          "modelopt_fp4"
+          # ---------------------------------------------------------------
+          # WEIGHT QUANTIZATION
+          #
+          # No --quantization flag: this checkpoint is compressed-tensors
+          # NVFP4 W4A4 and vLLM auto-detects the recipe from config.json.
+          # lm_head, vision, GDN conv1d, and the MTP head remain BF16.
+          # ---------------------------------------------------------------
+
+
+          # ---------------------------------------------------------------
+          # FLASHINFER
+          # ---------------------------------------------------------------
 
           "--attention-backend"
           "FLASHINFER"
 
+
+          # ---------------------------------------------------------------
+          # BLACKWELL NVFP4 LINEAR GEMM
+          # ---------------------------------------------------------------
+
+          "--linear-backend"
+          "flashinfer_cutlass"
+
+
+          # ---------------------------------------------------------------
+          # GDN PREFILL
+          #
+          # Use the stable Triton/FLA path that underlies the measured Saka
+          # 5090 numbers. This avoids another JIT/autotune variable while the
+          # machine is also serving as a desktop workstation.
+          # ---------------------------------------------------------------
+
+          "--gdn-prefill-backend"
+          "triton"
+
+
+          # ---------------------------------------------------------------
+          # CRITICAL RTX 5090 STABILITY FIX
+          #
+          # The previous checkpoint reached FlashInfer FP4 GEMM autotuning and
+          # OOMed while creating temporary profiling tensors at 20/21.
+          #
+          # Disable live FlashInfer autotuning.
+          #
+          # FlashInfer/vLLM will use its normal fallback/default tactic
+          # instead of allocating the large temporary tuning workspace.
+          # ---------------------------------------------------------------
+
+          "--no-enable-flashinfer-autotune"
+
+
+          # ---------------------------------------------------------------
+          # LONG-CONTEXT SCHEDULING
+          # ---------------------------------------------------------------
+
           "--enable-chunked-prefill"
 
-          "--async-scheduling"
+
+          # ---------------------------------------------------------------
+          # CLAUDE CODE PREFIX REUSE
+          # ---------------------------------------------------------------
 
           "--enable-prefix-caching"
 
+
+          # ---------------------------------------------------------------
+          # QWEN HYBRID STATE ALIGNMENT
+          # ---------------------------------------------------------------
+
+          "--mamba-cache-mode"
+          "align"
+
+
+          # ---------------------------------------------------------------
+          # SINGLE-USER / INTERACTIVE WORKSTATION PROFILE
+          # ---------------------------------------------------------------
+
+          "--performance-mode"
+          "interactivity"
+
+
+          # ---------------------------------------------------------------
+          # REQUEST LOGGING
+          #
+          # Full request-body logging intentionally disabled for throughput.
+          # ---------------------------------------------------------------
+
+
+
+          # ---------------------------------------------------------------
+          # LOW-OVERHEAD PERFORMANCE OBSERVABILITY
+          #
+          # Retain sampled KV-cache metrics. CUDA-graph metrics, MFU metrics,
+          # per-request dumps, per-iteration details, and JIT verbose logging
+          # are disabled in this production-speed profile.
+          # ---------------------------------------------------------------
+
+          "--kv-cache-metrics"
+
+          "--kv-cache-metrics-sample"
+          "$${KV_CACHE_METRICS_SAMPLE}"
+
+
+
+
+          # ---------------------------------------------------------------
+          # MODEL
+          # ---------------------------------------------------------------
+
           "--trust-remote-code"
 
-          "--default-chat-template-kwargs"
-          '{"enable_thinking":false}'
 
-          "--reasoning-parser"
-          "qwen3"
+          # ---------------------------------------------------------------
+          # THINKING HARD OFF — V2
+          #
+          # Do NOT configure --reasoning-parser on this Claude Code endpoint.
+          # With Anthropic /v1/messages, parsed reasoning becomes `thinking`
+          # content blocks. The Qwen template is forced to non-thinking above.
+          # ---------------------------------------------------------------
+
+          "--default-chat-template-kwargs"
+          '{"enable_thinking":false,"preserve_thinking":false}'
+
+
+          # ---------------------------------------------------------------
+          # TOOL CALLING
+          # ---------------------------------------------------------------
 
           "--enable-auto-tool-choice"
 
+
           "--tool-call-parser"
           "qwen3_coder"
+
         )
 
-        ######################################################################
-        # PRINT EXACT COMMAND
-        ######################################################################
+
+        #######################################################################
+        # MTP SPECULATIVE DECODING
+        #
+        # ON for this checkpoint; BF16 draft head is preserved and indexed.
+        #######################################################################
+
+        if [ "$${USE_MTP}" = "on" ]; then
+
+
+          echo
+          echo "MTP ENABLED: $${MTP_TOKENS} speculative tokens"
+          echo
+
+
+          VLLM_ARGS+=(
+
+            "--speculative-config"
+
+            "{\"method\":\"mtp\",\"num_speculative_tokens\":$${MTP_TOKENS}}"
+
+          )
+
+
+        else
+
+
+          echo
+          echo "MTP OFF — manual fallback mode"
+          echo
+
+
+        fi
+
+
+        #######################################################################
+        # OPTIONAL DEEP DEBUG (OFF IN SPEED PROFILE)
+        #######################################################################
+
+        if [ "$${LOCAL_DEEP_DEBUG:-0}" = "1" ]; then
+
+
+          echo
+          echo "======================================================================"
+          echo " DEEP DEBUG ENABLED"
+          echo "======================================================================"
+          echo
+
+
+          VLLM_ARGS+=(
+
+            "--enable-logging-iteration-details"
+
+            "--jit-monitor-verbose"
+
+          )
+
+
+        fi
+
+
+        #######################################################################
+        # FINAL CONFIG
+        #######################################################################
+
+        echo
+        echo "======================================================================"
+        echo " STARTING vLLM"
+        echo "======================================================================"
+        echo " vLLM                 : 0.28.0 + SM120 patch stack"
+        echo " Model                : Huihui Qwen3.8-27B Abliterated NVFP4"
+        echo " Context              : $${MAX_CONTEXT}"
+        echo " Weight quant         : compressed-tensors NVFP4 W4A4"
+        echo " KV quant             : $${KV_DTYPE}"
+        echo " KV cache budget      : $${KV_CACHE_MEMORY_BYTES} explicit"
+        echo " Max seqs             : $${MAX_SEQS}"
+        echo " Prefill chunk        : $${PREFILL_BATCH}"
+        echo " Prefix cache         : ON"
+        echo " FlashInfer           : ON"
+        echo " FlashInfer autotune  : OFF"
+        echo " SM120 NVFP4 preflight: PASS required"
+        echo " MTP                  : $${USE_MTP}"
+        echo " MTP speculative depth: $${MTP_TOKENS}"
+        echo " Thinking             : HARD OFF V2 (no reasoning parser)"
+        echo " vLLM log level       : $${VLLM_LOGGING_LEVEL}"
+        echo " Stats                : every $${VLLM_LOG_STATS_INTERVAL} sec"
+        echo " Iteration detail     : OFF"
+        echo " JIT verbose          : OFF"
+        echo " KV residency metrics : ON ($${KV_CACHE_METRICS_SAMPLE} sample)"
+        echo " CUDA graph metrics   : OFF"
+        echo " MFU metrics          : OFF"
+        echo "======================================================================"
+        echo
+
 
         echo "Executing:"
         echo
+
 
         printf ' %q' \
           vllm \
           serve \
           "$${VLLM_ARGS[@]}"
 
+
         echo
         echo
 
-        ######################################################################
-        # START vLLM
-        ######################################################################
 
-        exec vllm serve "$${VLLM_ARGS[@]}"
+        #######################################################################
+        # PERIODIC PROMETHEUS SNAPSHOTS
+        #######################################################################
+
+        export PROMETHEUS_LOG="$${LOG_DIR}/prometheus-$${RUN_ID}.log"
+
+        python3 -u - <<'PYMETRICS' &
+        import os
+        import time
+        import urllib.request
+        from datetime import datetime, timezone
+
+        output = os.environ["PROMETHEUS_LOG"]
+        interval = float(os.environ.get("PROMETHEUS_SNAPSHOT_INTERVAL_SEC", "10"))
+        url = "http://127.0.0.1:8006/metrics"
+        with open(output, "a", buffering=1) as handle:
+            while True:
+                try:
+                    with urllib.request.urlopen(url, timeout=2) as response:
+                        payload = response.read().decode("utf-8", errors="replace")
+                    stamp = datetime.now(timezone.utc).isoformat()
+                    handle.write(f"\n# ===== SNAPSHOT {stamp} =====\n")
+                    handle.write(payload)
+                    if not payload.endswith("\n"):
+                        handle.write("\n")
+                except Exception:
+                    pass
+                time.sleep(interval)
+        PYMETRICS
+
+        echo "Prometheus snapshots : $${PROMETHEUS_LOG}"
+
+
+        #######################################################################
+        # START
+        #######################################################################
+
+        exec \
+          vllm \
+          serve \
+          "$${VLLM_ARGS[@]}"
+
+
+    # =========================================================================
+    # HEALTH CHECK
+    # =========================================================================
 
     healthcheck:
+
       test:
         - CMD-SHELL
         - >-
@@ -679,6 +2583,24 @@ services:
           ).read()"
 
       interval: 30s
+
       timeout: 10s
+
       retries: 20
+
       start_period: 45m
+
+
+# =============================================================================
+# PERSISTENT CACHE VOLUMES
+# =============================================================================
+
+volumes:
+
+  qwen5090_vllm_cache:
+
+  qwen5090_triton_cache:
+
+  qwen5090_torch_cache:
+
+  qwen5090_flashinfer_cache:
