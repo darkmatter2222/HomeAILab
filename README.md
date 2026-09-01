@@ -96,11 +96,40 @@ streams; once bytes are flowing, no silent migration.
 
 ---
 
+## The 5090 is the speed king 👑
+
+The RTX 5090 (RedPCv2) is the **fastest backend in the fleet** and the primary
+target for high-throughput text workloads. The live stack (`backends/rtx5090/RTX5090DSAMPL.yaml`,
+Portainer endpoint 5, stack 23) runs the **Huihui Qwen3.8-27B Abliterated NVFP4**
+model at 262,144-token context with vLLM 0.28.0 + the SM120 NVFP4/XQA patch stack.
+
+| Metric | Value |
+|---|---|
+| **Sustained decode** | **~120–130 tok/s** (peak 124.9 tok/s observed; sustained ~120 tok/s across long generations) |
+| **MTP speculative decoding** | ON, 4 draft tokens; mean acceptance length 3.3–5.0; peak acceptance rate 100% at position 1 |
+| **Prefix cache hit rate** | ~84% (rising from ~47% early in the session to 84%+ as the session caches warm) |
+| **Prompt prefill** | ~2,000–54,000 tok/s (chunked prefill, 4,096-token chunks) |
+| **KV cache** | NVFP4 4-bit, explicit 7 GiB budget (~319,339 tokens of KV at max concurrency 1.22× the 262,144 limit) |
+| **Weight format** | compressed-tensors NVFP4 W4A4 (19.15 GiB checkpoint, ~20 GB) |
+| **Patch stack** | SM120 NVFP4 KV + XQA decode + MTP drafter CUDA graphs (pinned to commit `dd6801e`) |
+| **Model source** | `sakamakismile/Huihui-Qwen3.8-27B-abliterated-NVFP4` on HuggingFace (credit: huihui-ai) |
+
+> **Why the 5090 is this fast:** the SM120 patch stack installs an NVFP4 KV-cache
+> kernel overlay compiled for `sm_120a` (RTX 5090 Blackwell). FlashInfer handles
+> attention + sampling; XQA accelerates the speculative-verification path. The
+> MTP head (BF16) in the checkpoint is used for n=4 speculative decoding, and
+> prefix caching (84% hit) keeps repeated system prompts essentially free.
+> Result: a single-user workstation profile (`--performance-mode interactivity`)
+> that sustains **~120+ tok/s** while keeping ~2.75 GiB VRAM headroom for the
+> desktop OS.
+
+---
+
 ## Fleet (backends)
 
 | Backend | Device | GPU | Engine | Model | Quant | Port | Context | Cap | Measured |
 |---|---|---|---|---|---|---|---|---|---|
-| `qwen38-vllm-5090` | RedPCv2 | RTX 5090 32 GB | vLLM `0.27.1` | Qwen3.8-27B-Uncensored | `modelopt_fp4`, KV fp8 | `:8201` | 262 144 | 1 (router) | ~160–220 tok/s aggregate |
+| `qwen38-vllm-5090` | RedPCv2 | RTX 5090 32 GB | vLLM `0.28.0` + SM120 NVFP4/XQA | Huihui Qwen3.8-27B-abliterated | `compressed-tensors NVFP4 W4A4`, KV nvfp4 | `:8201` | 262 144 | 1 (router) | **~120–130 tok/s** (MTP n=4, 84% prefix-cache hit) |
 | `qwen38-27b-3090` | Databrick | RTX 3090 24 GB | llama.cpp `server-cuda12` | Qwen3.8-27B-Uncensored | `Q4_K_M` (fused MTP) | `:8101` | 262 144 | 1 | ~60 tok/s decode (MTP 1.47x) |
 | `qwen38-27b-dgxsparx` (27B) | DGX Spark | GB10 122 GB | vLLM `arm64-cu13 0.25.1` | Qwen3.8-27B-Uncensored | `modelopt_fp4` | `:8401` | 262 144 | 3 (router) | ~165 tok/s @16 wide |
 | `qwen38-flashnext-dgxsparx` | DGX Spark | GB10 122 GB | ds4 SSD-PLE (Flash-Next) | Qwen3.8-Flash-Next 180B MoE | `q6-ssd-ple-bf16` | `:8401` | 262 144 | 3 | vision; ~60–120 s cold TTFT |
@@ -115,9 +144,10 @@ SSD-PLE prefill, ~1 tok/s). The router's upstream response-header timeout is
 raised to 180 s so the slow prefill can emit a first byte before the router
 declares a pre-stream failure.
 
-The 5090 vLLM is **untouched** — the router only reads its `/health` +
-`/metrics` and proxies to it. Router-side static capacity is 1 even though the
-live vLLM runs `--max-num-seqs 2`.
+The router only reads the 5090's `/health` + `/metrics` and proxies to it.
+Router-side static capacity is 1 even though the live vLLM runs `--max-num-seqs 1`
+(mirror of the router cap). The 5090 stack is actively maintained through the
+SM120 NVFP4/XQA patch stack — not "untouched" — see the call-out above.
 
 ---
 
@@ -148,6 +178,7 @@ This fleet's live assignments: router `:8001`, 3090 llama `:8101`, 5090 vLLM
 |---|---|---|---|---|
 | Qwen3.8-27B-Uncensored | 27B dense, abliterated, MTP head | `Q4_K_M` (GGUF, fused MTP) | 16.8 GiB | 3090 (llama.cpp) |
 | Qwen3.8-27B-Uncensored | 27B, MTP-grafted | `NVFP4` (ModelOpt) | 19 GB + 0.8 GB head | 5090 + Spark (vLLM) |
+| **Huihui Qwen3.8-27B-abliterated** | 27B abliterated, MTP head preserved in BF16 | `compressed-tensors NVFP4 W4A4` | 19.15 GiB | **5090 (vLLM 0.28.0 + SM120 NVFP4/XQA)** |
 | Qwen3.8-Flash-Next | 180B MoE, native vision (Qwen tower) | `q6-ssd-ple-bf16` (Baekpica ds4) | ~100 GB SSD-PLE | Spark (ds4, vision) |
 
 All backends advertise `max_model_len 262144`. A true 258K-token prompt has been
