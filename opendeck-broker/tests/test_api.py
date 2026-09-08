@@ -171,6 +171,30 @@ def test_focus_endpoint_success_when_window_matches(server):
     assert res["status"] == "success"
 
 
+def test_focus_endpoint_ambiguous_when_multiple_windows_match(server):
+    # the /v1/focus endpoint resolves a press to a focus outcome. When the
+    # focus adapter finds multiple windows carrying the same marker, the
+    # outcome is AMBIGUOUS (can't tell which window to focus).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    broker.focus = WindowsFocusAdapter(
+        enumerate_windows=lambda cb: [cb(1, "[opencode:homeai] x") or True,
+                                      cb(2, "[opencode:homeai] y") or True],
+        show_window=lambda h, c=9: True,
+        set_foreground=lambda h: True,
+        get_foreground=lambda: 1,
+    )
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/x", "focusTarget": {"opaqueId": "opencode:homeai"}})
+    iid = reg["instanceId"]
+    gen = broker.registry.resolve(iid).generation
+    st, res = req("POST", f"{base}/v1/focus", token,
+                  {"instanceId": iid, "expectedGeneration": gen})
+    assert st == 200
+    assert res["status"] == "ambiguous"
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
