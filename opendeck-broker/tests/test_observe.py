@@ -214,6 +214,17 @@ def test_session_with_no_parts_is_idle(tmp_path):
     assert not st.has_pending_input
 
 
+def test_session_title_and_id_are_captured(tmp_path):
+    # the observer captures the session title and id (for diagnostics / the
+    # display identity), alongside the directory-keyed state facts.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/titled")
+    st = DbObserver(db).snapshot_by_directory()["/d/titled"]
+    assert st.session_id == "s1"
+    assert st.title == "title-s1"  # the add_session helper's title
+    assert st.has_session is True
+
+
 def test_missing_db_returns_empty(tmp_path):
     obs = DbObserver(tmp_path / "nope.db")
     assert obs.snapshot_by_directory() == {}
