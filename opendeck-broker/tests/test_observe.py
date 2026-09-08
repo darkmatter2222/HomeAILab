@@ -598,6 +598,35 @@ def test_running_tool_with_running_permission_is_busy_and_input(tmp_path):
     assert len(st.pending_permissions) == 1
 
 
+def test_running_tool_with_mixed_resolved_and_pending_requests(tmp_path):
+    # a session with a running tool AND a pending question AND a replied
+    # permission AND a rejected question: the running tool drives BUSY, the
+    # pending question is unresolved (has_pending_input True, 1 pending question),
+    # while BOTH the replied permission and the rejected question are resolved
+    # (pending_permissions empty, the second question not counted). The per-kind,
+    # per-status resolved filter works for a realistic mix of request parts.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/mix2")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-quest-pending", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-perm-replied", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "replied"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-quest-rejected", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "rejected"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/mix2"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_questions) == 1  # only the pending one; rejected excluded
+    assert st.pending_permissions == []  # replied permission is resolved
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
