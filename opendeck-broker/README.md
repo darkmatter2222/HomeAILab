@@ -53,6 +53,7 @@ tools/
   probe_device.py  PHYSICAL: open Mini, 6 black, 6 numbered, 6 key events
   probe_focus.py   PHYSICAL: focus a terminal, verify foreground
   selftest.py      SIMULATED: headless end-to-end with a mock device
+  demo_live.py     LIVE: read the real OpenCode DB, render the frame (mock device)
 tests/
   test_reducer.py / test_registry.py / test_protocol.py
   test_focus.py / test_observe.py / test_e2e_mock.py / test_api.py
@@ -65,6 +66,7 @@ cd opendeck-broker
 pip install -r requirements.txt
 python -m pytest tests -q        # headless (no Mini required)
 python tools/selftest.py         # simulated end-to-end demo
+python tools/demo_live.py        # render the real six-slot frame from the live DB
 ```
 
 `requirements.txt` needs `hidapi` (the `hid` Python binding, which on Windows also

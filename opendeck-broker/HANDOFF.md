@@ -100,6 +100,7 @@ cd opendeck-broker
 python -m pytest tests -q     # 87 pass
 python tools/acceptance.py    # 24/24 headless; writes acceptance-report.md
 python tools/selftest.py      # simulated end-to-end demo
+python tools/demo_live.py     # render the real frame from the live global DB
 ```
 
 Then, with the Mini attached (disabled in Elgato > Preferences > Devices > Enabled):
