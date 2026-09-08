@@ -452,6 +452,30 @@ def test_mixed_pending_question_and_resolved_permission(tmp_path):
     assert st.pending_permissions == []
 
 
+def test_running_tool_with_both_pending_requests(tmp_path):
+    # a session with a running tool AND a pending permission AND a pending
+    # question: the status is BUSY (the running tool), has_pending_input True,
+    # and BOTH pending requests are captured independently (1 permission, 1
+    # question). The reducer would show INPUT (pending beats busy).
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/all")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("part-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("part-perm", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "asked"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("part-quest", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/all"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input
+    assert len(st.pending_permissions) == 1
+    assert len(st.pending_questions) == 1
+
+
 def test_observer_opens_db_read_only(tmp_path, monkeypatch):
     # the observer must not grab a write lock on OpenCode's live store
     db, conn = make_db(tmp_path)
