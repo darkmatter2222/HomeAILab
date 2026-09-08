@@ -129,6 +129,17 @@ def test_completed_question_is_not_input(tmp_path):
     assert snap["/proj/a"].pending_questions == []
 
 
+def test_replied_question_is_not_pending(tmp_path):
+    # a question part whose status is "replied" (a resolved status) is not
+    # counted as pending -- parallel to the completed/error cases for questions.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/repliedq")
+    add_part(conn, "s1", {"type": "tool", "tool": "question", "state": {"status": "replied"}})
+    st = DbObserver(db).snapshot_by_directory()["/d/repliedq"]
+    assert st.pending_questions == []
+    assert not st.has_pending_input
+
+
 def test_errored_question_is_not_pending(tmp_path):
     # research section 6: "session.error -> do not invent a pending approval."
     db, conn = make_db(tmp_path)
