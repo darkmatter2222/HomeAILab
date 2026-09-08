@@ -110,10 +110,13 @@ def test_launch_project_uses_given_marker(monkeypatch):
 
 
 def test_launch_project_default_marker_is_unique(monkeypatch):
+    import re
+
     from opendeck_broker.focus.windows import launch_project
 
     monkeypatch.setattr("opendeck_broker.focus.windows.subprocess.Popen", lambda *a, **k: None)
     m1 = launch_project("/d/x", "bat.exe", "homeai")
     m2 = launch_project("/d/x", "bat.exe", "homeai")
-    assert m1.startswith("opencode:homeai-")
+    # exact launch-token shape: opencode:<alias>-<6 hex chars>
+    assert re.fullmatch(r"opencode:homeai-[0-9a-f]{6}", m1)
     assert m1 != m2  # two launches in the same dir get distinct tokens
