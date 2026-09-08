@@ -92,6 +92,28 @@ def test_token_is_stable_and_local(monkeypatch, tmp_path):
     assert (tmp_path / "token").exists()
 
 
+def test_token_strips_surrounding_whitespace(monkeypatch, tmp_path):
+    # a persisted token file with leading/trailing whitespace is stripped before
+    # use (so a trailing newline from an editor doesn't leak into the API token),
+    # and the stripped value is stable across calls.
+    monkeypatch.setenv("OPENDECK_BROKER_HOME", str(tmp_path))
+    (tmp_path / "token").write_text("  abcdef0123456789  \n")
+    c = Config()
+    assert c.token() == "abcdef0123456789"
+    assert c.token() == "abcdef0123456789"  # stable
+
+
+def test_token_recreates_when_blank(monkeypatch, tmp_path):
+    # a token file that is blank (empty or whitespace-only) is treated as
+    # unset: token() mints a fresh token and persists it (not the blank value).
+    monkeypatch.setenv("OPENDECK_BROKER_HOME", str(tmp_path))
+    (tmp_path / "token").write_text("   \n")
+    t = Config().token()
+    assert t.strip() == t  # no surrounding whitespace
+    assert t != ""  # a fresh token, not the blank value
+    assert (tmp_path / "token").read_text().strip() == t  # persisted
+
+
 def test_token_fallback_when_store_unwritable(monkeypatch, tmp_path):
     # if the token store can't be read/written (a permissions error, or the path
     # is occupied), token() falls back to a fresh in-memory token rather than
