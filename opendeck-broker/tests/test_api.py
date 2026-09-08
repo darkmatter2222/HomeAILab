@@ -276,6 +276,16 @@ def test_heartbeat_and_delete_via_api(server):
     assert st == 404
 
 
+def test_heartbeat_unknown_instance_is_404(server):
+    # the heartbeat endpoint returns 404 for an unknown instance (the broker
+    # has no record of it -- the producer should re-register).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, res = req("POST", f"{base}/v1/instances/nonexistent/heartbeat", token)
+    assert st == 404
+
+
 def test_deck_sse_initial_snapshot(server):
     import http.client
 
