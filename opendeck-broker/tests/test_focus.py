@@ -36,6 +36,24 @@ def test_ambiguous_when_multiple_match():
     assert res.status is FocusStatus.AMBIGUOUS
 
 
+def test_not_found_detail_includes_marker():
+    # a NOT_FOUND result carries the marker in its detail so the diagnostics can
+    # show which launch token had no window (a useful "attach/relaunch" hint).
+    ad = make_adapter([(10, "other window")])
+    res = ad.focus_marker("opencode:homeai")
+    assert res.status is FocusStatus.NOT_FOUND
+    assert "opencode:homeai" in res.detail
+
+
+def test_ambiguous_detail_includes_count():
+    # an AMBIGUOUS result carries the match count in its detail (so the
+    # diagnostics can say "N windows match" -- a launcher-binding bug).
+    ad = make_adapter([(10, "[opencode:x] a"), (11, "[opencode:x] b")])
+    res = ad.focus_marker("opencode:x")
+    assert res.status is FocusStatus.AMBIGUOUS
+    assert "2" in res.detail
+
+
 def test_success_when_foreground_confirmed():
     ad = make_adapter([(10, "[opencode:homeai] opencode")], foreground_after=10)
     res = ad.focus_marker("opencode:homeai")
