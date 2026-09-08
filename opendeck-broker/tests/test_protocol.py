@@ -94,6 +94,16 @@ def test_mark_dead_clears_slot():
     assert reg.frame()[slot].appearance is DisplayAppearance.BLACK
 
 
+def test_adapter_heartbeat_delegates_to_registry():
+    # the adapter's heartbeat is a thin passthrough to the registry: it returns
+    # the broker epoch for a known launch and None for an unknown id (so a client
+    # can detect a broker restart and re-register).
+    reg, adapter = adapter_with({})
+    iid, _ = adapter.register_launch("/d/a", "a", pid=LIVE)
+    assert adapter.heartbeat(iid) == reg.broker_epoch
+    assert adapter.heartbeat("missing") is None
+
+
 def test_stale_snapshot_rejected_after_reregister_epoch():
     reg, adapter = adapter_with({})
     iid, _ = adapter.register_launch("/d/a", "a", pid=LIVE)
