@@ -77,6 +77,22 @@ def test_marker_match_is_case_insensitive_substring():
     assert res.hwnd == 7
 
 
+def test_resolve_returns_status_and_matches():
+    # resolve is the pure marker->hwnds step focus_marker builds on: NOT_FOUND
+    # with an empty list, AMBIGUOUS with all matches, SUCCESS with the single one.
+    ad = make_adapter([(10, "[opencode:x] a"), (11, "[opencode:x] b"), (12, "other")])
+    status, matches = ad.resolve("opencode:x")
+    assert status is FocusStatus.AMBIGUOUS
+    assert sorted(matches) == [10, 11]
+    status, matches = ad.resolve("opencode:solo")
+    assert status is FocusStatus.NOT_FOUND
+    assert matches == []
+    ad2 = make_adapter([(20, "[opencode:solo] w")])
+    status, matches = ad2.resolve("opencode:solo")
+    assert status is FocusStatus.SUCCESS
+    assert matches == [20]
+
+
 def test_focus_restores_window_before_foreground():
     # research section 10: "if target is minimized: restore it" then activate.
     from opendeck_broker.focus.windows import SW_RESTORE, WindowsFocusAdapter
