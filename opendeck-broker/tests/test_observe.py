@@ -495,6 +495,19 @@ def test_mixed_pending_and_resolved_questions(tmp_path):
     assert len(st.pending_questions) == 1  # only the pending one, not the completed one
 
 
+def test_multi_session_active_tool_folded(tmp_path):
+    # a directory with two live sessions where one has a running tool (and the
+    # other is idle): the active-tool count is folded across all live sessions in
+    # the directory, so the directory is BUSY (a child still executing keeps the
+    # owning TUI busy without taking a separate slot).
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s-idle", "/d/fold")
+    add_session(conn, "s-busy", "/d/fold")
+    add_part(conn, "s-busy", {"type": "tool", "tool": "bash", "state": {"status": "running"}})
+    st = DbObserver(db).snapshot_by_directory()["/d/fold"]
+    assert st.status is Status.BUSY  # the running tool from either session drives it
+
+
 def test_fresh_session_with_no_parts_is_idle(tmp_path):
     # a session with no parts (a fresh TUI that has not done anything yet) is
     # IDLE -- no running tool, no pending request, no recent activity -- so the
