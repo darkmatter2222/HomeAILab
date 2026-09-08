@@ -101,6 +101,24 @@ def test_detach_clears_slot():
     assert reg.frame()[slot].appearance is DisplayAppearance.BLACK
 
 
+def test_refresh_with_observer_exception_marks_unknown():
+    # research section 6: when the bridge (DB read) is unavailable, the TUI's
+    # telemetry is untrusted -> UNKNOWN (amber "?"), not a lying green/amber.
+    # A refresh that catches the observer's error must mark the launch untrusted.
+    reg = Registry()
+
+    class RaisingObserver:
+        def snapshot_by_directory(self):
+            raise RuntimeError("db lock held")
+
+    adapter = OpenCodeAdapter(reg, RaisingObserver())
+    iid, slot = adapter.register_launch("/d/a", "a", pid=LIVE)
+    adapter.refresh()
+    assert reg.frame()[slot].appearance is DisplayAppearance.UNKNOWN
+    # the instance is still tracked (not freed) -- only its trust flag changed
+    assert reg.frame()[slot].instance_id == iid
+
+
 def test_mark_dead_clears_slot():
     reg, adapter = adapter_with({})
     iid, slot = adapter.register_launch("/d/a", "a", pid=LIVE)
