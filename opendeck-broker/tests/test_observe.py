@@ -138,6 +138,22 @@ def test_archived_session_excluded(tmp_path):
     assert "/proj/d" not in snap
 
 
+def test_default_run_window_is_15s(tmp_path):
+    # the default recency window is 15 s (RUN_WINDOW_MS): a part ~10 s ago is
+    # still "recent" (busy), a part ~20 s ago is not (idle, no active tool).
+    from opendeck_broker.opencode.observe import RUN_WINDOW_MS
+
+    assert RUN_WINDOW_MS == 15_000
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/recent")
+    add_part(conn, "s1", {"type": "text"}, upd=now_ms() - 10_000)
+    add_session(conn, "s2", "/d/old")
+    add_part(conn, "s2", {"type": "text"}, upd=now_ms() - 20_000)
+    snap = DbObserver(db).snapshot_by_directory()  # default run window
+    assert snap["/d/recent"].status is Status.BUSY
+    assert snap["/d/old"].status is Status.IDLE
+
+
 def test_running_tool_stays_busy_without_fresh_parts(tmp_path):
     # research section 2: "Run a long tool without tokens -> Remains green."
     # A tool part still in state running/pending keeps the TUI busy even if no
