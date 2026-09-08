@@ -53,6 +53,13 @@ def test_pending_question_is_input_even_if_busy():
     assert derive_display(make(status=Status.BUSY, questions=["q1"])) is DisplayAppearance.INPUT
 
 
+def test_retry_with_pending_input_is_input():
+    # a retrying (RUN) session that also has an unresolved request shows INPUT,
+    # not green (research section 6 precedence: INPUT > RUN)
+    assert derive_display(make(status=Status.RETRY, questions=["q1"])) is DisplayAppearance.INPUT
+    assert derive_display(make(status=Status.RETRY, perms=["p1"])) is DisplayAppearance.INPUT
+
+
 def test_two_pending_resolving_one_stays_input():
     inst = make(status=Status.IDLE, perms=["p1", "p2"])
     assert derive_display(inst) is DisplayAppearance.INPUT
