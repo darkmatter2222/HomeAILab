@@ -97,6 +97,21 @@ def test_is_busy_reflects_status():
     assert make(status=Status.IDLE).is_busy() is False
 
 
+def test_add_ignores_empty_and_remove_unknown_is_noop():
+    # add_* guards against a falsy request id (no empty-string entry); remove_*
+    # with an unknown id is a clean no-op (no KeyError / no crash).
+    inst = make(status=Status.IDLE)
+    inst.add_permission("")
+    inst.add_question("")
+    assert inst.pending_permission_ids == []
+    assert inst.pending_question_ids == []
+    inst.add_permission("p1")
+    inst.remove_permission("missing")  # unknown id, must not raise
+    assert inst.pending_permission_ids == ["p1"]
+    inst.remove_question("missing")  # unknown id, must not raise
+    assert inst.pending_question_ids == []
+
+
 def test_add_dedupes_and_remove_clears():
     # add_permission / add_question must not double-count the same request id,
     # and remove_* must clear it so INPUT resolves back to IDLE.
