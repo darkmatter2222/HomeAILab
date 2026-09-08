@@ -15,6 +15,7 @@ section 11).
 
 from __future__ import annotations
 
+import threading
 from collections import deque
 from typing import Optional
 
@@ -46,6 +47,9 @@ class Broker:
         # slot -> last uploaded image bytes; identical re-renders are skipped so
         # we don't hammer the device over USB (research section 11).
         self._rendered: dict[int, bytes] = {}
+        # Serializes image uploads (research section 11): the main loop and the
+        # REST API can both request a render, so guard the upload path.
+        self._render_lock = threading.Lock()
         self._started = False
 
     # ------------------------------------------------------------------ #
@@ -95,8 +99,9 @@ class Broker:
         if self.device is None:
             return
         black = render_key(DisplayAppearance.BLACK, size=self.image_size)
-        for i in range(self.registry.slots):
-            self._upload(i, black)
+        with self._render_lock:
+            for i in range(self.registry.slots):
+                self._upload(i, black)
 
     # ------------------------------------------------------------------ #
     def render(self) -> None:
@@ -105,9 +110,10 @@ class Broker:
         unnecessary USB traffic)."""
         if self.device is None:
             return
-        for ss in self.registry.frame():
-            image = render_key(ss.appearance, ss.label, size=self.image_size)
-            self._upload(ss.slot, image)
+        with self._render_lock:
+            for ss in self.registry.frame():
+                image = render_key(ss.appearance, ss.label, size=self.image_size)
+                self._upload(ss.slot, image)
 
     # ------------------------------------------------------------------ #
     def on_key(self, slot: int) -> None:

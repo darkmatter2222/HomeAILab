@@ -154,6 +154,36 @@ def test_press_does_not_change_registration_or_epoch():
     assert broker.registry.frame()[slot].appearance is appearance_before  # state unchanged
 
 
+def test_concurrent_renders_are_serialized():
+    # research section 11: serialize image uploads (main loop + REST API can
+    # both render). Concurrent renders must not race the cache or leave a torn
+    # frame.
+    import threading
+
+    broker, adapter, device, obs = build(
+        states={"/d/a": SessionState(directory="/d/a", has_session=True, status="busy")}
+    )
+    broker.start()
+    adapter.register_launch("/d/a", "a", pid=LIVE)
+    adapter.refresh()
+    errors = []
+
+    def worker():
+        try:
+            for _ in range(50):
+                broker.render()
+        except Exception as e:  # pragma: no cover - race indicator
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors
+    assert all(device.images.get(i) is not None for i in range(6))
+
+
 def test_press_on_black_key_does_nothing():
     broker, adapter, device, obs = build(windows=[])
     broker.start()
