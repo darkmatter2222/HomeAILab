@@ -444,12 +444,39 @@ def run_matrix(keep_going: bool = False) -> list[tuple[Row, str, str]]:
     return results
 
 
+def _environment_lines() -> list[str]:
+    # research section 14: "Record exact versions." Record the runtime the headless
+    # rows ran under (the broker's Python deps); OpenCode is the host Node CLI.
+    import importlib.metadata as md
+    import sys
+
+    def v(name: str) -> str:
+        try:
+            return md.version(name)
+        except Exception:
+            return "absent"
+
+    return [
+        f"- Python {sys.version.split()[0]}",
+        f"- Pillow {v('pillow')}",
+        f"- psutil {v('psutil')}",
+        f"- python-hid (hidapi) {v('hid')}",
+        f"- python-elgato-streamdeck {v('python-elgato-streamdeck')}",
+        f"- pytest {v('pytest')}",
+        "- OpenCode: host Node CLI (version via `opencode --version`)",
+    ]
+
+
 def write_report(results: list[tuple[Row, str, str]], physical: list) -> Path:
     out = Path(__file__).resolve().parent.parent / "acceptance-report.md"
     lines = [
         "# opendeck-broker acceptance matrix",
         "",
         f"Generated: {datetime.now().isoformat(timespec='seconds')}",
+        "",
+        "## Environment (exact versions, research section 14)",
+        "",
+        *_environment_lines(),
         "",
         "Headless rows run with an in-memory device + fake observer + injected",
         "window/foreground fakes. Physical rows require the real Mini and are",

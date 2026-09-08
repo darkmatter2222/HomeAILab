@@ -1,6 +1,16 @@
 # opendeck-broker acceptance matrix
 
-Generated: 2026-09-07T22:39:01
+Generated: 2026-09-07T23:07:43
+
+## Environment (exact versions, research section 14)
+
+- Python 3.13.7
+- Pillow 12.0.0
+- psutil 7.1.3
+- python-hid (hidapi) 1.0.9
+- python-elgato-streamdeck absent
+- pytest 9.1.1
+- OpenCode: host Node CLI (version via `opencode --version`)
 
 Headless rows run with an in-memory device + fake observer + injected
 window/foreground fakes. Physical rows require the real Mini and are
