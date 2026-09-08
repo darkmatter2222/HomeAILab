@@ -337,6 +337,22 @@ def test_missing_db_returns_empty(tmp_path):
     assert obs.snapshot_by_directory() == {}
 
 
+def test_pending_status_permission_is_pending(tmp_path):
+    # a permission part whose status is "pending" (a non-resolved status, not in
+    # the resolved set) is counted as pending (INPUT) -- parallel to "asked".
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/pendingperm")
+    conn.execute(
+        "INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+        ("p-pend", "s1", now_ms(),
+         json.dumps({"type": "tool", "tool": "permission", "state": {"status": "pending"}})),
+    )
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/pendingperm"]
+    assert st.has_pending_input
+    assert len(st.pending_permissions) == 1
+
+
 def test_running_permission_is_pending(tmp_path):
     # a permission part whose status is "running" (not in the resolved set) is
     # still an unresolved structured request -> pending (INPUT); parallel to the
