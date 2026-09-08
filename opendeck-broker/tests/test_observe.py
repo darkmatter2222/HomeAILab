@@ -741,6 +741,35 @@ def test_running_tool_with_pending_question_and_running_permission(tmp_path):
     assert len(st.pending_permissions) == 1
 
 
+def test_running_tool_with_pending_and_running_question_plus_running_permission(tmp_path):
+    # a session with a running tool AND a pending question AND a running question
+    # AND a running permission: BOTH question parts are unresolved (one pending,
+    # one running -- neither in the resolved set) so pending_questions is 2, and
+    # the running permission is unresolved so pending_permissions is 1. The
+    # running tool drives BUSY. This exercises the full non-resolved status space
+    # (pending + running) across both request kinds simultaneously.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/mixed2")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-q-pending", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-q-running", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-p-running", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "running"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/mixed2"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_questions) == 2  # pending + running, both unresolved
+    assert len(st.pending_permissions) == 1  # running permission, unresolved
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
