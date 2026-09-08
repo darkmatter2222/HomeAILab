@@ -433,6 +433,24 @@ def test_concurrent_renders_are_serialized():
     assert all(device.images.get(i) is not None for i in range(6))
 
 
+def test_stop_blacks_out_and_closes_device():
+    # broker.stop() blacks out all keys (uploads black to each) and closes the
+    # device -- a graceful shutdown leaves the Mini blank, not showing a stale
+    # state (research section 8). The device is disconnected after stop().
+    broker, adapter, device, obs = build(
+        {"/d/a": SessionState(directory="/d/a", has_session=True)}
+    )
+    broker.start()
+    adapter.register_launch("/d/a", "a", pid=LIVE)
+    adapter.refresh()
+    broker.render()  # a live (non-black) frame is on the device
+    assert any(b != 0 for b in device.images.get(0, b""))  # non-black before stop
+    broker.stop()
+    assert device.is_connected() is False  # device closed
+    for i in range(6):
+        assert device.images.get(i) == render_key(DisplayAppearance.BLACK)  # all black
+
+
 def test_press_on_black_key_does_nothing():
     broker, adapter, device, obs = build(windows=[])
     broker.start()
