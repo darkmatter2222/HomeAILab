@@ -80,3 +80,27 @@ def test_idle_does_not_erase_outstanding_requests():
     inst = make(status=Status.BUSY, questions=["q1"])
     inst.set_status(Status.IDLE)  # idle event arrives
     assert derive_display(inst) is DisplayAppearance.INPUT
+
+
+def test_is_busy_reflects_status():
+    # is_busy is True for BUSY and RETRY (both "executing"), False for IDLE.
+    assert make(status=Status.BUSY).is_busy() is True
+    assert make(status=Status.RETRY).is_busy() is True
+    assert make(status=Status.IDLE).is_busy() is False
+
+
+def test_add_dedupes_and_remove_clears():
+    # add_permission / add_question must not double-count the same request id,
+    # and remove_* must clear it so INPUT resolves back to IDLE.
+    inst = make(status=Status.IDLE)
+    inst.add_permission("p1")
+    inst.add_permission("p1")  # duplicate must not stack
+    assert inst.pending_permission_ids == ["p1"]
+    inst.add_question("q1")
+    inst.add_question("q1")  # duplicate must not stack
+    assert inst.pending_question_ids == ["q1"]
+    assert inst.has_pending_input() is True
+    inst.remove_permission("p1")
+    inst.remove_question("q1")
+    assert inst.has_pending_input() is False
+    assert derive_display(inst) is DisplayAppearance.IDLE
