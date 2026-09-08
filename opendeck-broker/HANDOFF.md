@@ -2,7 +2,7 @@
 
 Maps the key requirements in `docs/streamdeck-opencode-research.md` to where they
 are implemented, the test that proves them, and their status. "Headless-verified"
-means proven by `python -m pytest tests` (82 tests) without the physical Mini.
+means proven by `python -m pytest tests` (83 tests) without the physical Mini.
 "Physical-pending" means it needs the real Mini (and, for focus, a second
 foreground app); the probe tool is ready but the row is not yet claimed as passed
 per research section 14 ("Do not report the reboot, USB, or physical-press tests
@@ -16,6 +16,7 @@ as passed from a simulated API test").
 | One button per live TUI instance | `registry.register` (per-instance slot) | `test_registry`, `test_protocol` | headless-verified |
 | State derived from actual runtime facts | `opencode/observe.py` (global DB) + `opencode/process.py` (process exit) | `test_observe`, `test_process`, live-DB check | headless-verified |
 | Presses only focus windows (no state mutation) | `broker._handle_press` -> `focus.focus_marker` | `test_e2e_mock::test_register_render_press_focus_cycle`, B-14 | headless-verified |
+| Press focuses without a new registration / epoch bump (research 11) | `broker.on_key` captures occupant+gen; `_handle_press` is read-only on registry | `test_e2e_mock::test_press_does_not_change_registration_or_epoch` | headless-verified |
 
 ## Behavior contract (research section 2)
 
@@ -93,7 +94,7 @@ as passed from a simulated API test").
 
 ```
 cd opendeck-broker
-python -m pytest tests -q     # 82 pass
+python -m pytest tests -q     # 83 pass
 python tools/acceptance.py    # 24/24 headless; writes acceptance-report.md
 python tools/selftest.py      # simulated end-to-end demo
 ```

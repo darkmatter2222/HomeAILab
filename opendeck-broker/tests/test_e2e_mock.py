@@ -112,6 +112,30 @@ def test_render_caches_identical_images():
     assert device.set_calls == first + 1
 
 
+def test_press_does_not_change_registration_or_epoch():
+    # research section 11: a press only focuses; it must not trigger a new
+    # observation epoch or a new instance registration.
+    broker, adapter, device, obs = build(
+        states={"/d/a": SessionState(directory="/d/a", has_session=True, status="busy")}
+    )
+    broker.start()
+    iid, slot = adapter.register_launch("/d/a", "a", pid=LIVE)
+    broker.focus = focus_for_instances(broker, [iid])
+    adapter.refresh()
+    broker.render()
+    count_before = len(broker.registry.instances)
+    gen_before = broker.registry.slot_generation(slot)
+    appearance_before = broker.registry.frame()[slot].appearance
+    # deliver a real press edge and process it (this is where focusing happens)
+    device.inject_press(slot)
+    results = broker.process_presses()
+    assert results[0]["result"] == FocusStatus.SUCCESS.value  # focus actually happened
+    # yet the registry was not mutated by the press
+    assert len(broker.registry.instances) == count_before  # no new instance
+    assert broker.registry.slot_generation(slot) == gen_before  # generation unchanged
+    assert broker.registry.frame()[slot].appearance is appearance_before  # state unchanged
+
+
 def test_press_on_black_key_does_nothing():
     broker, adapter, device, obs = build(windows=[])
     broker.start()
