@@ -2,7 +2,7 @@
 
 Maps the key requirements in `docs/streamdeck-opencode-research.md` to where they
 are implemented, the test that proves them, and their status. "Headless-verified"
-means proven by `python -m pytest tests` (89 tests) without the physical Mini.
+means proven by `python -m pytest tests` (90 tests) without the physical Mini.
 "Physical-pending" means it needs the real Mini (and, for focus, a second
 foreground app); the probe tool is ready but the row is not yet claimed as passed
 per research section 14 ("Do not report the reboot, USB, or physical-press tests
@@ -25,6 +25,7 @@ as passed from a simulated API test").
 | No TUI -> black, no text; press = nothing | `model.derive_display`, `broker._handle_press` | `test_reducer`, B-01, B-15 | headless-verified |
 | Ready -> amber IDLE; press focuses | reducer + focus | B-02, `test_e2e_mock` | headless-verified |
 | Busy/generating/tool/retry -> green RUN | reducer (`Status.BUSY`/`RETRY`) | B-05, B-06, B-07 | headless-verified |
+| Long tool without tokens stays green (a running/pending tool = busy) | `observe.DbObserver` (active-tool count) | `test_observe::test_running_tool_stays_busy_without_fresh_parts` | headless-verified (live: home_llm -> run) |
 | Unresolved permission/question -> red INPUT; press focuses, doesn't answer | reducer precedence | B-08, B-09, B-10 | headless-verified |
 | Instance dies -> slot black | `opencode/adapter.refresh` (process exit) + `process.is_alive` | `test_process`, B-18, B-19 | headless-verified |
 | Six slots row-major; no compaction; overflow (7th) not silent | `registry` (row-major, lowest-free, `overflow()`) | `test_registry`, B-03, B-23 | headless-verified |
@@ -100,7 +101,7 @@ as passed from a simulated API test").
 
 ```
 cd opendeck-broker
-python -m pytest tests -q     # 89 pass
+python -m pytest tests -q     # 90 pass
 python tools/acceptance.py    # 24/24 headless; writes acceptance-report.md
 python tools/selftest.py      # simulated end-to-end demo
 python tools/demo_live.py     # render the real frame from the live global DB

@@ -38,7 +38,11 @@ SELECT s.id, s.directory, s.title,
      AND json_extract(p.data,'$.type')='tool'
      AND json_extract(p.data,'$.tool')='permission'
      AND json_extract(p.data,'$.state.status') != 'completed'
-   ) AS pending_perm
+    ) AS pending_perm,
+  (SELECT COUNT(*) FROM part p WHERE p.session_id = s.id
+     AND json_extract(p.data,'$.type')='tool'
+     AND json_extract(p.data,'$.state.status') IN ('running','pending')
+    ) AS active_tool
 FROM session s
 WHERE (s.time_archived IS NULL OR s.time_archived = 0);
 """
@@ -99,7 +103,8 @@ class DbObserver:
 
         by_dir: dict[str, SessionState] = {}
         latest: dict[str, Optional[int]] = {}
-        for sid, directory, title, last_part_upd, pending_q, pending_perm in rows:
+        active_tool: dict[str, int] = {}
+        for sid, directory, title, last_part_upd, pending_q, pending_perm, active in rows:
             d = _norm_dir(directory)
             st = by_dir.get(d)
             if st is None:
@@ -111,13 +116,18 @@ class DbObserver:
             # track the most recent part update for the directory (busy/idle)
             if d not in latest or (last_part_upd or 0) > (latest[d] or 0):
                 latest[d] = last_part_upd
+            # a tool still executing keeps the TUI busy even without fresh parts
+            active_tool[d] = max(active_tool.get(d, 0), int(active or 0))
 
         for d, st in by_dir.items():
             st.has_session = True
             lpu = latest.get(d)
-            # A recent part update (within the window) means busy; otherwise
-            # idle. The window is a debounce, not a state guess.
-            st.status = Status.BUSY if (lpu is not None and now - lpu < self.run_window_ms) else Status.IDLE
+            # Busy if a tool is still running/pending (a long tool without token
+            # streaming) OR a part was updated within the window; otherwise idle.
+            # The window is a debounce, not a state guess.
+            tool_running = active_tool.get(d, 0) > 0
+            recent = lpu is not None and now - lpu < self.run_window_ms
+            st.status = Status.BUSY if (tool_running or recent) else Status.IDLE
         return by_dir
 
 

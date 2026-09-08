@@ -20,7 +20,7 @@ def now_ms():
     return int(time.time() * 1000)
 
 
-def make_db(tmp_path, directory="/d/homeai", recent=True):
+def make_db(tmp_path, directory="/d/homeai", recent=True, tool_status="running"):
     db = tmp_path / "opencode.db"
     conn = sqlite3.connect(str(db))
     conn.execute(
@@ -38,7 +38,7 @@ def make_db(tmp_path, directory="/d/homeai", recent=True):
     )
     conn.execute(
         "INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
-        ("p1", "s1", t, json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})),
+        ("p1", "s1", t, json.dumps({"type": "tool", "tool": "bash", "state": {"status": tool_status}})),
     )
     conn.commit()
     conn.close()
@@ -65,7 +65,8 @@ def test_busy_session_renders_green(tmp_path):
 
 
 def test_idle_session_renders_amber(tmp_path):
-    db = make_db(tmp_path, recent=False)  # old part update -> not busy
+    # old part update AND a completed tool -> not busy (amber)
+    db = make_db(tmp_path, recent=False, tool_status="completed")
     cfg = Config(db_path=db, port=0)
     stack = build_stack(config=cfg, use_mock=True)
     _, slot = stack.adapter.register_launch("/d/homeai", "homeai", pid=LIVE)

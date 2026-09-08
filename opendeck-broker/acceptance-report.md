@@ -1,6 +1,6 @@
 # opendeck-broker acceptance matrix
 
-Generated: 2026-09-07T22:15:00
+Generated: 2026-09-07T22:23:31
 
 Headless rows run with an in-memory device + fake observer + injected
 window/foreground fakes. Physical rows require the real Mini and are

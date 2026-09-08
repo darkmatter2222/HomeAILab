@@ -88,6 +88,19 @@ def test_archived_session_excluded(tmp_path):
     assert "/proj/d" not in snap
 
 
+def test_running_tool_stays_busy_without_fresh_parts(tmp_path):
+    # research section 2: "Run a long tool without tokens -> Remains green."
+    # A tool part still in state running/pending keeps the TUI busy even if no
+    # part has updated within the recency window (a long command with no output).
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/longtool")
+    old = now_ms() - 60_000  # 60 s ago, well beyond the 15 s recency window
+    add_part(conn, "s1", {"type": "tool", "tool": "bash", "state": {"status": "running"}}, upd=old)
+    conn.close()
+    st = DbObserver(db).snapshot_by_directory()["/d/longtool"]
+    assert st.status is Status.BUSY
+
+
 def test_missing_db_returns_empty(tmp_path):
     obs = DbObserver(tmp_path / "nope.db")
     assert obs.snapshot_by_directory() == {}
