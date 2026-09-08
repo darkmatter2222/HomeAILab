@@ -195,6 +195,18 @@ def test_focus_endpoint_ambiguous_when_multiple_windows_match(server):
     assert res["status"] == "ambiguous"
 
 
+def test_display_with_no_instances_is_all_black(server):
+    # with no registered instances, the display frame is all six slots black
+    # (nothing to show).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, disp = req("GET", f"{base}/v1/display", token)
+    assert st == 200
+    assert len(disp["frame"]) == 6
+    assert all(s["appearance"] == "black" for s in disp["frame"])
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
