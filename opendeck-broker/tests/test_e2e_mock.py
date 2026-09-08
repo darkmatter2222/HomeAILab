@@ -194,6 +194,26 @@ def test_raw_hid_poll_emits_press_edges():
     assert seen == [0, 3]
 
 
+def test_raw_hid_poll_ignores_out_of_range_reports():
+    # a report whose key index is at/above the Mini's 6 keys (idx >= rows*cols)
+    # must not be emitted as a press (guards against malformed reports).
+    from opendeck_broker.device.hid_mini import ElgatoMiniHID
+
+    class FakeHid:
+        def __init__(self, reports):
+            self.reports = list(reports)
+
+        def read(self, n):
+            return self.reports.pop(0) if self.reports else b""
+
+    deck = ElgatoMiniHID()
+    deck._hid = FakeHid([b"\x00", b"\x05", b"\x06", b"\x09"])  # 0,5 ok; 6,9 out of range
+    seen = []
+    deck.set_key_press_handler(seen.append)
+    deck.poll()
+    assert seen == [0, 5]
+
+
 def test_concurrent_renders_are_serialized():
     # research section 11: serialize image uploads (main loop + REST API can
     # both render). Concurrent renders must not race the cache or leave a torn
