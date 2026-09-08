@@ -48,10 +48,18 @@ class Registry:
     _instance_slot: dict = field(default_factory=dict)
     # instance_id -> (producer_epoch, sequence) last accepted
     _producer: dict = field(default_factory=dict)
+    # instance_id -> monotonic time last seen (register/snapshot/heartbeat),
+    # used for lease-based fallback cleanup (research section 14).
+    _last_seen: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if len(self._slot_generation) != self.slots:
             self._slot_generation = [0] * self.slots
+
+    def _touch(self, instance_id: str) -> None:
+        import time
+
+        self._last_seen[instance_id] = time.monotonic()
 
     # ---------------- helpers ----------------
     @property
@@ -77,6 +85,7 @@ class Registry:
         inst.live = True
         self._instances[inst.instance_id] = inst
         self._producer[inst.instance_id] = (inst.producer_epoch, inst.sequence)
+        self._touch(inst.instance_id)
 
         existing = self._instance_slot.get(inst.instance_id)
         if existing is not None and self._slot_occupant[existing] == inst.instance_id:
@@ -117,6 +126,7 @@ class Registry:
             self.register(inst)
             self._producer[inst.instance_id] = (epoch, seq)
             self._instances[inst.instance_id] = inst
+            self._touch(inst.instance_id)
             return True
 
         last_epoch, last_seq = last
@@ -130,6 +140,7 @@ class Registry:
         # apply
         self._instances[inst.instance_id] = inst
         self._producer[inst.instance_id] = (epoch, seq)
+        self._touch(inst.instance_id)
         return True
 
     # ---------------- presence ----------------
@@ -138,7 +149,29 @@ class Registry:
         broker restart (it must then re-register with a full snapshot)."""
         if instance_id not in self._instances:
             return None
+        self._touch(instance_id)
         return self.broker_epoch
+
+    def sweep_expired(self, lease_seconds: float, now: Optional[float] = None) -> list[str]:
+        """Lease-based fallback cleanup (research section 14).
+
+        Frees instances whose producer has not been seen (register/snapshot/
+        heartbeat) within ``lease_seconds``. The local TUI flow keeps instances
+        fresh via the adapter's per-tick refresh, so this only fires for a
+        producer that has genuinely gone quiet (e.g. a remote client crash).
+        Returns the freed instance ids.
+        """
+        if now is None:
+            import time
+
+            now = time.monotonic()
+        expired: list[str] = []
+        for iid in list(self._instances):
+            seen = self._last_seen.get(iid)
+            if seen is not None and now - seen > lease_seconds:
+                self._free_slot(iid)
+                expired.append(iid)
+        return expired
 
     # ---------------- detach / death ----------------
     def _free_slot(self, instance_id: str) -> None:
@@ -147,6 +180,7 @@ class Registry:
             self._slot_occupant[slot] = None
         self._instances.pop(instance_id, None)
         self._producer.pop(instance_id, None)
+        self._last_seen.pop(instance_id, None)
 
     def detach(self, instance_id: str) -> bool:
         """Best-effort explicit detach."""

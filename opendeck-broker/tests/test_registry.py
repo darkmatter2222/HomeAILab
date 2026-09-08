@@ -1,3 +1,5 @@
+import time
+
 from opendeck_broker.model import Instance, Process, Status
 from opendeck_broker.registry import Registry
 
@@ -110,3 +112,27 @@ def test_heartbeat_returns_broker_epoch():
     r.register(inst("a"))
     assert r.heartbeat("a") == r.broker_epoch
     assert r.heartbeat("nope") is None
+
+
+def test_lease_sweep_frees_a_quiet_producer():
+    # research section 14: fallback cleanup within the configured lease window
+    r = Registry()
+    r.register(inst("a"))
+    now = time.monotonic()
+    # a generous lease keeps the just-registered instance
+    assert r.sweep_expired(lease_seconds=60, now=now) == []
+    assert "a" in r.instances
+    # simulate 100 s passing with no further snapshot/heartbeat
+    freed = r.sweep_expired(lease_seconds=10, now=now + 100)
+    assert freed == ["a"]
+    assert "a" not in r.instances
+
+
+def test_lease_sweep_heartbeat_keeps_instance_alive():
+    r = Registry()
+    r.register(inst("a"))
+    now = time.monotonic()
+    # a heartbeat just before the sweep refreshes last_seen
+    r.heartbeat("a")
+    assert r.sweep_expired(lease_seconds=10, now=time.monotonic()) == []
+    assert "a" in r.instances

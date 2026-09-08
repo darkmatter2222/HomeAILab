@@ -44,7 +44,10 @@ def build_stack(config: Optional[Config] = None, use_mock: bool = False) -> Stac
         device = ElgatoMiniHID(serial=config.device_serial)
 
     focus = WindowsFocusAdapter()
-    broker = Broker(registry=registry, device=device, focus=focus, image_size=config.image_size)
+    broker = Broker(
+        registry=registry, device=device, focus=focus,
+        image_size=config.image_size, lease_seconds=config.lease_seconds,
+    )
     api = ApiServer(broker, adapter, config)
     return Stack(config=config, broker=broker, adapter=adapter, device=device, api=api)
 
@@ -67,6 +70,7 @@ def run(config: Optional[Config] = None, use_mock: bool = False, tick: Optional[
         ticks = 0
         while True:
             stack.adapter.refresh()
+            stack.broker.sweep()
             stack.broker.render()
             stack.broker.process_presses()
             ticks += 1

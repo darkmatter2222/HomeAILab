@@ -32,11 +32,13 @@ class Broker:
         device: Optional[DeviceAdapter] = None,
         focus: Optional[WindowsFocusAdapter] = None,
         image_size: int = DEFAULT_KEY_SIZE,
+        lease_seconds: Optional[float] = None,
     ) -> None:
         self.registry = registry or Registry()
         self.device = device
         self.focus = focus
         self.image_size = image_size
+        self.lease_seconds = lease_seconds
         # (slot, captured_instance_id, captured_generation) pending press edges
         self._press_queue: deque = deque()
         # diagnostics: last focus attempts
@@ -124,6 +126,14 @@ class Broker:
             slot, inst_id, gen = self._press_queue.popleft()
             results.append(self._handle_press(slot, inst_id, gen))
         return results
+
+    def sweep(self) -> list[str]:
+        """Lease-based fallback cleanup: free instances whose producer has gone
+        quiet (research section 14: 'fallback cleanup within the configured
+        lease/probe window'). No-op when no lease is configured."""
+        if self.lease_seconds is None:
+            return []
+        return self.registry.sweep_expired(self.lease_seconds)
 
     def _handle_press(self, slot: int, inst_id: Optional[str], gen: int) -> dict:
         entry = {"slot": slot, "instance_id": inst_id, "expected_generation": gen}
