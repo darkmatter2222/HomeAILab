@@ -1,0 +1,17 @@
+{
+  "opencode": {
+    "url": "http://127.0.0.1:4096"
+  },
+  "projects": [
+    {
+      "alias": "homeai",
+      "path": "C:/Users/ryans/source/repos/HomeAILab",
+      "bat": "C:/Users/ryans/bin/opencode-3090-serve.bat"
+    },
+    {
+      "alias": "ryans",
+      "path": "C:/Users/ryans",
+      "bat": "C:/Users/ryans/bin/opencode-3090-serve.bat"
+    }
+  ]
+}

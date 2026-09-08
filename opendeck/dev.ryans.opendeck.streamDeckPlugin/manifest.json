@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "Name": "OpenCode Deck",
+  "Version": "1.0.0",
+  "Author": "Ryan Susman",
+  "Description": "Live state bar for your local OpenCode agents: green=working, amber=idle, red=asking a question, gray=no connected env. Auto-updates as sessions change; press a key to focus that session's terminal.",
+  "UUID": "dev.ryans.opendeck",
+  "Icon": "imgs/plugin",
+  "Category": "OpenCode Deck",
+  "CategoryIcon": "imgs/plugin",
+  "CodePath": "bin/plugin.mjs",
+  "SDKVersion": 2,
+  "Nodejs": {
+    "Version": "20",
+    "Debug": ""
+  },
+  "Software": {
+    "MinimumVersion": "6.5"
+  },
+  "OS": [
+    { "Platform": "windows", "MinimumVersion": "10" },
+    { "Platform": "mac", "MinimumVersion": "11.0" }
+  ],
+  "Actions": [
+    {
+      "UUID": "dev.ryans.opendeck.project",
+      "Name": "Agent State",
+      "Tooltip": "One key per OpenCode project. RAG state: green=working, amber=idle, red=asking a question, gray=no env. Press to focus the session's terminal.",
+      "Icon": "imgs/list/project",
+      "PropertyInspectorPath": "pi/pi.html",
+      "Controllers": ["Keypad"],
+      "SupportedInMultiActions": false,
+      "UserTitleEnabled": false,
+      "States": [
+        { "Image": "imgs/project-off", "ShowTitle": false }
+      ]
+    },
+    {
+      "UUID": "dev.ryans.opendeck.alert",
+      "Name": "Needs You",
+      "Tooltip": "Counts agents blocked on you (red = asking a question).",
+      "Icon": "imgs/list/alert",
+      "Controllers": ["Keypad"],
+      "SupportedInMultiActions": false,
+      "UserTitleEnabled": false,
+      "States": [
+        { "Image": "imgs/alert", "ShowTitle": false }
+      ]
+    }
+  ]
+}

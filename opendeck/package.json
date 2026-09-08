@@ -1,0 +1,23 @@
+{
+  "name": "opendeck",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Elgato Stream Deck plugin: live state bar for your local OpenCode agents (green/amber/red RAG states, auto-updating, press-to-focus).",
+  "type": "module",
+  "main": "src/plugin.js",
+  "scripts": {
+    "build": "node tools/build.mjs && node tools/genicons.mjs",
+    "build:bundle": "node tools/build.mjs",
+    "pack": "node tools/pack.mjs",
+    "test": "node --test \"test/*.test.js\"",
+    "selftest": "node dev.ryans.opendeck.streamDeckPlugin/bin/plugin.mjs --selftest"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@elgato/cli": "^1.7.4",
+    "@resvg/resvg-js": "^2.6.2",
+    "esbuild": "^0.24.2"
+  }
+}

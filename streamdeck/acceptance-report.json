@@ -1,0 +1,541 @@
+{
+  "generated": "2026-09-04T23:40:11",
+  "results": {
+    "TC-001": true,
+    "TC-002": true,
+    "TC-003": true,
+    "TC-004": true,
+    "TC-005": true,
+    "TC-006": true,
+    "TC-007": true,
+    "TC-008": true,
+    "TC-009": true,
+    "TC-010": true,
+    "TC-011": true,
+    "TC-012": true,
+    "TC-013": true,
+    "TC-020": true,
+    "TC-021": true,
+    "TC-022": true,
+    "TC-023": true,
+    "TC-024": true,
+    "TC-030": true,
+    "TC-031": true,
+    "TC-032": true,
+    "TC-033": true,
+    "TC-034": true,
+    "TC-040": true,
+    "TC-041": true,
+    "TC-050": true,
+    "TC-051": true,
+    "TC-052": true,
+    "TC-053": true,
+    "TC-054": true
+  },
+  "log": [
+    {
+      "ts": "2026-09-04T23:32:52",
+      "tc": "TC-040",
+      "session_id": "ses_f905fce4cffed31Z0tdcIVbhIK",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "idle",
+      "serve_status": "off",
+      "db_state": "idle",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "idle",
+        "expected_color": "#F5B13D",
+        "color_found": true,
+        "other_state_colors_present": [
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:33:24",
+      "tc": "TC-040",
+      "session_id": "ses_f905fce4cffed31Z0tdcIVbhIK",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "running",
+      "serve_status": "off",
+      "db_state": "running",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "running",
+        "expected_color": "#2FD06F",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "RED"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:33:36",
+      "tc": "TC-040",
+      "session_id": "ses_f905f31e7ffem1Sa6v3ezod0Hx",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "waiting",
+      "serve_status": "busy",
+      "db_state": "waiting",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "waiting",
+        "expected_color": "#FF5A4E",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:33:43",
+      "tc": "TC-040",
+      "session_id": null,
+      "alias": "homeai",
+      "key": 0,
+      "expected": "off",
+      "serve_status": "off",
+      "db_state": "off",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "off",
+        "expected_color": "#5A5E6B",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:33:50",
+      "tc": "TC-041",
+      "session_id": "ses_f905ee704ffediRNUTNxHSqZyl",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "idle",
+      "serve_status": "off",
+      "db_state": "idle",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "idle",
+        "expected_color": "#F5B13D",
+        "color_found": true,
+        "other_state_colors_present": [
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:34:17",
+      "tc": "TC-041",
+      "session_id": "ses_f905ee704ffediRNUTNxHSqZyl",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "running",
+      "serve_status": "off",
+      "db_state": "running",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "running",
+        "expected_color": "#2FD06F",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "RED"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:34:30",
+      "tc": "TC-041",
+      "session_id": "ses_f905e5dd2ffeDGJxw8qC6aYTk0",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "waiting",
+      "serve_status": "busy",
+      "db_state": "waiting",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "waiting",
+        "expected_color": "#FF5A4E",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:35:21",
+      "tc": "TC-041",
+      "session_id": null,
+      "alias": "homeai",
+      "key": 0,
+      "expected": "off",
+      "serve_status": "off",
+      "db_state": "off",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "off",
+        "expected_color": "#5A5E6B",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:35:27",
+      "tc": "TC-041",
+      "session_id": "ses_f905d6aa0fferfW6M53jiDEPPw",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "idle",
+      "serve_status": "off",
+      "db_state": "idle",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "idle",
+        "expected_color": "#F5B13D",
+        "color_found": true,
+        "other_state_colors_present": [
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:35:54",
+      "tc": "TC-041",
+      "session_id": "ses_f905d6aa0fferfW6M53jiDEPPw",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "running",
+      "serve_status": "off",
+      "db_state": "running",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "running",
+        "expected_color": "#2FD06F",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "RED"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:36:07",
+      "tc": "TC-041",
+      "session_id": "ses_f905ce2e4ffepdAno98Ync7co2",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "waiting",
+      "serve_status": "busy",
+      "db_state": "waiting",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "waiting",
+        "expected_color": "#FF5A4E",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:36:58",
+      "tc": "TC-041",
+      "session_id": null,
+      "alias": "homeai",
+      "key": 0,
+      "expected": "off",
+      "serve_status": "off",
+      "db_state": "off",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "off",
+        "expected_color": "#5A5E6B",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:37:04",
+      "tc": "TC-041",
+      "session_id": "ses_f905bf001ffe0CRNNFvwWXhdY1",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "idle",
+      "serve_status": "off",
+      "db_state": "idle",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "idle",
+        "expected_color": "#F5B13D",
+        "color_found": true,
+        "other_state_colors_present": [
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:37:31",
+      "tc": "TC-041",
+      "session_id": "ses_f905bf001ffe0CRNNFvwWXhdY1",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "running",
+      "serve_status": "off",
+      "db_state": "running",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "running",
+        "expected_color": "#2FD06F",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "RED"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:37:44",
+      "tc": "TC-041",
+      "session_id": "ses_f905b67f9ffewusHHGFoyzNi7s",
+      "alias": "homeai",
+      "key": 0,
+      "expected": "waiting",
+      "serve_status": "busy",
+      "db_state": "waiting",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "waiting",
+        "expected_color": "#FF5A4E",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:38:35",
+      "tc": "TC-041",
+      "session_id": null,
+      "alias": "homeai",
+      "key": 0,
+      "expected": "off",
+      "serve_status": "off",
+      "db_state": "off",
+      "deck_state": "unknown",
+      "profile_key_map": "homeai",
+      "physical": {
+        "expected_state": "off",
+        "expected_color": "#5A5E6B",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:38:57",
+      "tc": "TC-050",
+      "killed_pid": 19284,
+      "deck_state": "unknown",
+      "db_state": "off",
+      "physical": {
+        "expected_state": "off",
+        "expected_color": "#5A5E6B",
+        "color_found": true,
+        "other_state_colors_present": [
+          "AMBER",
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:39:09",
+      "tc": "TC-051",
+      "session_id": "ses_f905a1be3ffeiuWthOpBeSRmPa",
+      "restart_stdout": "Restarting dev.ryans.opendeck\n\u001b[32mâˆš\u001b[39m Restarted dev.ryans.opendeck",
+      "deck_state": "unknown",
+      "db_state": "idle",
+      "physical": {
+        "expected_state": "idle",
+        "expected_color": "#F5B13D",
+        "color_found": true,
+        "other_state_colors_present": [
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:39:29",
+      "tc": "TC-052",
+      "session_id": "ses_f9059ede3ffeTQDM6IxRr94FLQ",
+      "deck_state": "unknown",
+      "db_state": "idle",
+      "physical": {
+        "expected_state": "idle",
+        "expected_color": "#F5B13D",
+        "color_found": true,
+        "other_state_colors_present": [
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:39:48",
+      "tc": "TC-052",
+      "session_id": "ses_f9059a174ffeKrnXM4SzWLHOyO",
+      "deck_state": "unknown",
+      "db_state": "idle",
+      "physical": {
+        "expected_state": "idle",
+        "expected_color": "#F5B13D",
+        "color_found": true,
+        "other_state_colors_present": [
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    },
+    {
+      "ts": "2026-09-04T23:40:11",
+      "tc": "TC-054",
+      "session_id": "ses_f905954e7ffe6EDQOxJvwCUcjT",
+      "killed_plugin_pid": 47020,
+      "restart_stdout": "Restarting dev.ryans.opendeck\n\u001b[32mâˆš\u001b[39m Restarted dev.ryans.opendeck",
+      "deck_state": "unknown",
+      "db_state": "idle",
+      "physical": {
+        "expected_state": "idle",
+        "expected_color": "#F5B13D",
+        "color_found": true,
+        "other_state_colors_present": [
+          "RED",
+          "GREEN"
+        ],
+        "verdict": "VERDICT: 4/5 target colors found in Stream Deck app window (device mirror)",
+        "ok": true
+      },
+      "pass_": true
+    }
+  ],
+  "latencies": [
+    {
+      "tc": "TC-002",
+      "session": "ses_f907497c2ffe96AEzyxy6VVo8N",
+      "detector_latency_ms": 7039
+    },
+    {
+      "tc": "TC-004",
+      "session": "ses_f90745567ffedJwIVOH2WCsrpA",
+      "detector_latency_ms": 5962
+    },
+    {
+      "tc": "TC-005",
+      "session": "ses_f90743e20ffeOmq0ddhCq9Smdw",
+      "detector_latency_ms": 22524
+    }
+  ]
+}
