@@ -426,6 +426,20 @@ def test_register_reuses_freed_slot(server):
     assert reg2["slot"] == slot1  # the freed slot is reused
 
 
+def test_register_with_long_alias_still_registers(server):
+    # a long alias still registers (the display label is truncated for rendering,
+    # but the registration succeeds).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    long_alias = "a" * 200
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/long", "alias": long_alias, "pid": 1})
+    assert st == 200
+    assert reg["instanceId"]  # registered successfully
+    assert reg["slot"] in (0, 1, 2, 3, 4, 5)
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
