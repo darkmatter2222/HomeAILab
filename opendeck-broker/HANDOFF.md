@@ -17,6 +17,7 @@ as passed from a simulated API test").
 | State derived from actual runtime facts | `opencode/observe.py` (global DB) + `opencode/process.py` (process exit) | `test_observe`, `test_process`, live-DB check | headless-verified |
 | Presses only focus windows (no state mutation) | `broker._handle_press` -> `focus.focus_marker` | `test_e2e_mock::test_register_render_press_focus_cycle`, B-14 | headless-verified |
 | Press focuses without a new registration / epoch bump (research 11) | `broker.on_key` captures occupant+gen; `_handle_press` is read-only on registry | `test_e2e_mock::test_press_does_not_change_registration_or_epoch` | headless-verified |
+| Rapid presses: no double execution, no color cycling (research 14) | press only focuses (never toggles); each edge focuses once | B-16 (models rapid presses) | headless-verified |
 
 ## Behavior contract (research section 2)
 

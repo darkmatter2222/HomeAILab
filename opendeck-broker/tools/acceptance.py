@@ -261,11 +261,20 @@ def r_click_black_key_nothing(h: Harness) -> None:
 
 
 def r_single_press_single_focus(h: Harness) -> None:
+    # research section 14: "Press and release / rapid presses -> no double
+    # execution or color cycling." A press only focuses (it never toggles state),
+    # so rapid presses each focus exactly once and the appearance does not cycle.
     _, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.broker.focus = make_focus(windows=[(7, "[opencode:a] x")], foreground_after=7)
-    h.device.inject_press(s)
+    h.adapter.refresh(); h.broker.render()
+    appearance_before = h.ap(s)
+    # rapid presses on the same key (press-and-release a few times)
+    for _ in range(3):
+        h.device.inject_press(s)
     res = h.broker.process_presses()
-    assert len(res) == 1  # one press edge -> one focus request
+    assert len(res) == 3  # three press edges -> three focus requests (no doubling)
+    # a press only focuses; it never toggles, so the appearance did not cycle
+    assert h.ap(s) is appearance_before
 
 
 def r_switch_conversation_same_slot(h: Harness) -> None:
