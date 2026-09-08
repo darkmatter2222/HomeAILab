@@ -30,6 +30,14 @@ def test_untrusted_is_unknown():
     assert derive_display(make(trusted=False)) is DisplayAppearance.UNKNOWN
 
 
+def test_dead_wins_over_untrusted():
+    # derive_display precedence (research section 6): a dead instance (no live UI
+    # attachment) is BLACK even if its telemetry is also untrusted -- the live
+    # check comes before the trust check, so we never show an amber "?" for a
+    # slot that has no occupant.
+    assert derive_display(make(live=False, trusted=False)) is DisplayAppearance.BLACK
+
+
 def test_idle_is_amber():
     assert derive_display(make(status=Status.IDLE)) is DisplayAppearance.IDLE
 
