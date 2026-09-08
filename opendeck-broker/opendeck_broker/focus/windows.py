@@ -152,11 +152,15 @@ class WindowsFocusAdapter:
         return self.focus(matches[0])
 
 
-def launch_project(path: str, bat: str, alias: str) -> str:
+def launch_project(path: str, bat: str, alias: str, marker: Optional[str] = None) -> str:
     """Open a Windows Terminal window running the launcher, with a stable title
-    marker. Returns the marker. `--suppressApplicationTitle`-style stability is
-    achieved by `cmd /k title <marker>` so the tab title stays the marker."""
-    marker = f"opencode:{alias}"
+    marker. Returns the marker. The marker is the same unique launch token the
+    adapter registers as the focus target, so a later press resolves to this
+    exact window. `cmd /k title <marker>` keeps the tab title stable."""
+    if marker is None:
+        import uuid
+
+        marker = f"opencode:{alias}-{uuid.uuid4().hex[:6]}"
     cmd_line = f"title {marker} opencode & {bat}"
     subprocess.Popen(
         ["wt", "-w", "new", "-d", path, "cmd", "/k", cmd_line],

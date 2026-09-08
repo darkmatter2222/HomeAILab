@@ -57,3 +57,33 @@ def test_marker_match_is_case_insensitive_substring():
     res = ad.focus_marker("opencode:homeai")
     assert res.status is FocusStatus.SUCCESS
     assert res.hwnd == 7
+
+
+def test_launch_project_uses_given_marker(monkeypatch):
+    from opendeck_broker.focus.windows import launch_project
+
+    calls = []
+
+    class FakePopen:
+        def __init__(self, args, **kw):
+            calls.append(args)
+
+    monkeypatch.setattr("opendeck_broker.focus.windows.subprocess.Popen", FakePopen)
+    m = launch_project("/d/x", "bat.exe", "homeai", marker="opencode:homeai-a1b2c3")
+    assert m == "opencode:homeai-a1b2c3"
+    args = calls[0]
+    assert args[0] == "wt"
+    assert "-w" in args and "new" in args
+    assert "-d" in args and "/d/x" in args
+    # the window title carries the exact focus marker
+    assert any(a == "title opencode:homeai-a1b2c3 opencode & bat.exe" for a in args)
+
+
+def test_launch_project_default_marker_is_unique(monkeypatch):
+    from opendeck_broker.focus.windows import launch_project
+
+    monkeypatch.setattr("opendeck_broker.focus.windows.subprocess.Popen", lambda *a, **k: None)
+    m1 = launch_project("/d/x", "bat.exe", "homeai")
+    m2 = launch_project("/d/x", "bat.exe", "homeai")
+    assert m1.startswith("opencode:homeai-")
+    assert m1 != m2  # two launches in the same dir get distinct tokens

@@ -106,6 +106,31 @@ def test_register_display_focus_roundtrip(server):
     assert st == 200 and diag["registry"]["slots"][0]["instance_id"] == iid
 
 
+def test_deck_sse_initial_snapshot(server):
+    import http.client
+
+    api, port, broker = server
+    token = api.token
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    conn.request("GET", "/v1/deck", headers={"X-OpenDeck-Token": token})
+    resp = conn.getresponse()
+    try:
+        assert resp.status == 200
+        assert "text/event-stream" in (resp.getheader("Content-Type") or "")
+        data = None
+        for _ in range(8):
+            line = resp.fp.readline().decode().strip()
+            if line.startswith("data:"):
+                data = line[5:].strip()
+                break
+        assert data is not None
+        obj = json.loads(data)
+        assert obj["type"] == "snapshot"
+        assert len(obj["frame"]) == 6
+    finally:
+        conn.close()
+
+
 def test_wrong_token_rejected(server):
     api, port, broker = server
     st, body = req("GET", f"http://127.0.0.1:{port}/v1/display", "wrong-token")
