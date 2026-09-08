@@ -1,0 +1,7 @@
+# opendeck-broker (option A: direct HID Mini + Python broker)
+# Core (stdlib): sqlite3, http.server, ctypes, dataclasses
+# Required for physical device control:
+hidapi>=0.14.0          # python `hid` binding (needs hidapi.dll on Windows)
+Pillow>=10.0.0          # key image rendering
+# Optional (preferred over raw hid; pins the Mini image/key-report protocol):
+# elgato-streamdeck>=0.2.0
