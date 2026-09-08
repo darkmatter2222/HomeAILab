@@ -64,6 +64,28 @@ def mk_focus(windows, fg):
     )
 
 
+def test_sse_event_wire_format():
+    # the SSE event formatter is the exact bytes the deck consumer parses: it
+    # must be a "data: {json}\n\n" frame with the payload intact.
+    from opendeck_broker.api import _Handler
+
+    data = _Handler._event({"type": "snapshot", "frame": [{"slot": 0, "appearance": "black"}]})
+    assert data.startswith(b"data: ")
+    assert data.endswith(b"\n\n")
+    assert json.loads(data[len(b"data: "):-2]) == {
+        "type": "snapshot",
+        "frame": [{"slot": 0, "appearance": "black"}],
+    }
+
+
+def test_api_server_exposes_token_and_port(server):
+    # the ApiServer accessors the launcher/consumer rely on: a non-empty token
+    # and the actual bound port (0 -> an ephemeral port was chosen).
+    api, port, _ = server
+    assert api.port() == port
+    assert isinstance(api.token, str) and api.token
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
