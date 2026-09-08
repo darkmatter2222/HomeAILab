@@ -65,3 +65,19 @@ def test_pid_reuse_guarded_by_start_time():
     live_start = int(psutil.Process(os.getpid()).create_time() * 1000)
     assert is_alive(os.getpid(), live_start) is True
     assert is_alive(os.getpid(), live_start + 1) is False  # mismatched start time
+
+
+def test_recycled_pid_cleared_via_adapter_refresh():
+    # end-to-end: the adapter pairs the pid with the verified creation time, so a
+    # refresh sees a same-pid whose start time no longer matches (recycled) and
+    # clears the slot instead of trusting it.
+    import psutil
+
+    reg = Registry()
+    adapter = OpenCodeAdapter(reg, FakeObserver())
+    pid = os.getpid()
+    real_start = int(psutil.Process(pid).create_time() * 1000)
+    _, slot = adapter.register_launch("/d/a", "a", pid=pid, start_time=real_start + 1)
+    adapter.refresh()
+    assert reg.frame()[slot].instance_id is None
+    assert reg.frame()[slot].appearance is DisplayAppearance.BLACK
