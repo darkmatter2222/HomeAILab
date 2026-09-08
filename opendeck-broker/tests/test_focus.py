@@ -101,8 +101,12 @@ def test_launch_project_uses_given_marker(monkeypatch):
     assert args[0] == "wt"
     assert "-w" in args and "new" in args
     assert "-d" in args and "/d/x" in args
-    # the window title carries the exact focus marker
-    assert any(a == "title opencode:homeai-a1b2c3 opencode & bat.exe" for a in args)
+    # research section 10: a stable unique title the running TUI can't overwrite
+    assert "--title" in args
+    assert args[args.index("--title") + 1] == "opencode:homeai-a1b2c3"
+    assert "--suppressApplicationTitle" in args
+    # runs the launcher bat inside that dedicated window
+    assert "bat.exe" in args
 
 
 def test_launch_project_default_marker_is_unique(monkeypatch):

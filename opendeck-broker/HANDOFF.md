@@ -77,6 +77,7 @@ as passed from a simulated API test").
 | Requirement | Where | Evidence | Status |
 |---|---|---|---|
 | Unique launch token = window identity (not title/PID) | `adapter.register_launch`, `focus.launch_project` | `test_focus` (launch marker), B-04 | headless-verified |
+| Launcher sets a stable unique title the TUI can't overwrite (research 10) | `focus.launch_project` (`--title` + `--suppressApplicationTitle`) | `test_focus::test_launch_project_uses_given_marker` | headless-verified (physical = `probe_focus.py`) |
 | Resolve marker -> exactly one window; else NOT_FOUND/AMBIGUOUS | `focus.WindowsFocusAdapter.resolve` | `test_focus` | headless-verified |
 | Restore if minimized; verify actual foreground window | `focus.focus` (`ShowWindow` + `GetForegroundWindow`) | `test_focus::test_success_when_foreground_confirmed`, `test_focus_denied_when_foreground_not_our_window` | headless-verified (physical = `probe_focus.py`) |
 | A stale button never falls through to creating a window | marker scan (no `wt -w NAME` create) | `test_focus::test_not_found` | headless-verified |

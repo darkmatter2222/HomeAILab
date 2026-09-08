@@ -153,17 +153,20 @@ class WindowsFocusAdapter:
 
 
 def launch_project(path: str, bat: str, alias: str, marker: Optional[str] = None) -> str:
-    """Open a Windows Terminal window running the launcher, with a stable title
-    marker. Returns the marker. The marker is the same unique launch token the
-    adapter registers as the focus target, so a later press resolves to this
-    exact window. `cmd /k title <marker>` keeps the tab title stable."""
+    """Open a dedicated Windows Terminal window running the launcher, with a
+    stable unique title (research section 10). Returns the marker, which is the
+    same launch token the adapter registers as the focus target, so a later
+    press resolves to this exact window. ``--title`` sets the marker and
+    ``--suppressApplicationTitle`` keeps the running TUI from overwriting it, so
+    focus.resolve can always find this window by marker."""
     if marker is None:
         import uuid
 
         marker = f"opencode:{alias}-{uuid.uuid4().hex[:6]}"
-    cmd_line = f"title {marker} opencode & {bat}"
     subprocess.Popen(
-        ["wt", "-w", "new", "-d", path, "cmd", "/k", cmd_line],
+        ["wt", "-w", "new", "-d", path,
+         "--title", marker, "--suppressApplicationTitle",
+         "cmd", "/k", bat],
         stdio=subprocess.DEVNULL,
         creationflags=getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
     )
