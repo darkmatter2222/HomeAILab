@@ -224,6 +224,24 @@ def test_register_overflow_when_all_slots_full(server):
     assert res["slot"] is None  # no free slot -> overflow
 
 
+def test_display_multiple_instances_use_distinct_slots(server):
+    # with multiple registered instances, each is assigned its own slot (not
+    # all in slot 0) and the display reflects both.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg1 = req("POST", f"{base}/v1/instances/register", token,
+                   {"directory": "/d/a", "alias": "a", "pid": 1001})
+    st, reg2 = req("POST", f"{base}/v1/instances/register", token,
+                   {"directory": "/d/b", "alias": "b", "pid": 1002})
+    assert reg1["slot"] != reg2["slot"]  # distinct slots
+    st, disp = req("GET", f"{base}/v1/display", token)
+    assert st == 200 and len(disp["frame"]) == 6
+    # both occupied slots are non-black (each has a live instance)
+    assert disp["frame"][reg1["slot"]]["appearance"] != "black"
+    assert disp["frame"][reg2["slot"]]["appearance"] != "black"
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
