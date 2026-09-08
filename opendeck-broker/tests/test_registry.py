@@ -182,6 +182,29 @@ def test_lease_sweep_heartbeat_keeps_instance_alive():
     assert "a" in r.instances
 
 
+def test_lease_sweep_frees_multiple_quiet_producers():
+    # several quiet instances past the lease are all freed in one sweep (the
+    # fallback cleanup is not limited to a single stale producer).
+    r = Registry()
+    r.register(inst("a"))
+    r.register(inst("b"))
+    r.register(inst("c"))
+    now = time.monotonic()
+    freed = r.sweep_expired(lease_seconds=10, now=now + 100)
+    assert set(freed) == {"a", "b", "c"}
+    assert r.instances == {}
+
+
+def test_validate_press_unknown_instance_is_false():
+    # a press for an instance that is no longer in the registry is a clean no-op
+    # (False), not a crash -- a stale key press after its TUI left.
+    r = Registry()
+    r.register(inst("a"))
+    assert r.validate_press("missing", 1) is False
+    # the live instance still validates
+    assert r.validate_press("a", r.slot_generation(0)) is True
+
+
 def test_to_diagnostics_reports_slots_overflow_and_live():
     # the diagnostics payload (surfaced by /v1/diagnostics) must reflect the six
     # slots, the overflow set, and every live instance's status.
