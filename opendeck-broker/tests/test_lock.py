@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from opendeck_broker.lock import BrokerLock
@@ -43,3 +44,23 @@ def test_release_is_idempotent_enough_to_reacquire():
     c = BrokerLock()
     assert c.acquire() is True
     c.release()
+
+
+def test_lockfile_fallback_excludes_and_releases(monkeypatch, tmp_path):
+    # the portable lockfile path (non-Windows) must exclude a second instance
+    # and clean up its lockfile on release so a later broker can acquire.
+    # (the private methods are exercised directly; they carry no os.name check,
+    # so the Windows pathlib flavor is left intact)
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    lockfile = tmp_path / "opendeck-broker.lock"
+
+    a = BrokerLock()
+    assert a._acquire_lockfile() is True
+    assert lockfile.exists()  # lockfile created
+    b = BrokerLock()
+    assert b._acquire_lockfile() is False  # lockfile exists -> rejected
+    a._release_lockfile()
+    assert lockfile.exists() is False  # release removed it
+    c = BrokerLock()
+    assert c._acquire_lockfile() is True  # reacquirable after release
+    c._release_lockfile()
