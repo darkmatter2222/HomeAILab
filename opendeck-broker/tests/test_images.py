@@ -100,6 +100,22 @@ def test_identity_does_not_change_color():
     assert any(x != 0 for x in b)
 
 
+def test_short_boundary_and_whitespace():
+    # _short keeps exactly-12-char text (no truncation) but truncates 13+, and
+    # strips surrounding whitespace before measuring.
+    assert _short("a" * 12) == "a" * 12          # exactly 12: no truncation
+    assert len(_short("a" * 13)) == 12            # 13: truncated to 11 + "."
+    assert _short("   homeai   ") == "homeai"     # whitespace stripped
+    assert _short("") == ""                        # empty stays empty
+
+
+def test_black_ignores_identity():
+    # a BLACK key is solid black regardless of any identity/label (the text is
+    # only drawn for non-black appearances), so a stale title never survives a
+    # blacked-out slot.
+    assert render_key(DisplayAppearance.BLACK, "homeai", size=16) == black_frame(16)
+
+
 def test_color_palette_matches_documented_rag():
     assert APPEARANCE_COLOR[DisplayAppearance.RUN].startswith("#2fd06f")
     assert APPEARANCE_COLOR[DisplayAppearance.IDLE].startswith("#f5b13d")
