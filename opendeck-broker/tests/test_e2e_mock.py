@@ -261,6 +261,17 @@ def test_base_press_handler_dispatch():
     assert seen == [3]
 
 
+def test_device_key_count_is_six():
+    # the Mini has 6 keys (2 rows x 3 cols); key_count() is the source of truth
+    # for the render loop (it uploads exactly this many keys) and must agree for
+    # every adapter.
+    from opendeck_broker.device.hid_mini import ElgatoMiniHID
+
+    assert MockDevice().key_count() == 6
+    assert ElgatoMiniHID().key_count() == 6
+    assert MockDevice.rows * MockDevice.cols == 6  # the base default
+
+
 def test_raw_hid_poll_ignores_out_of_range_reports():
     # a report whose key index is at/above the Mini's 6 keys (idx >= rows*cols)
     # must not be emitted as a press (guards against malformed reports).
