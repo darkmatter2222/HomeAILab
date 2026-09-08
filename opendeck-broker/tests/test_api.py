@@ -397,6 +397,20 @@ def test_snapshot_retry_status_shows_run(server):
     assert disp["frame"][slot]["appearance"] == "run"
 
 
+def test_register_assigns_slots_in_order(server):
+    # registering instances assigns slots in order (0, 1, 2, ...), not
+    # randomly.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    slots = []
+    for i in range(4):
+        st, reg = req("POST", f"{base}/v1/instances/register", token,
+                      {"directory": f"/d/{i}", "alias": f"a{i}", "pid": 1000 + i})
+        slots.append(reg["slot"])
+    assert slots == [0, 1, 2, 3]  # sequential assignment
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
