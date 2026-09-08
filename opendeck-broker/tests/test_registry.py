@@ -99,6 +99,18 @@ def test_different_epoch_rejected_without_reregister():
     assert r.accept_snapshot(inst("a", epoch="e2", seq=101), "e2", 101) is True
 
 
+def test_accept_snapshot_not_registered_yet_registers():
+    # a snapshot for an instance that has not been registered yet is treated as
+    # a register (the first message a producer sends may be a snapshot, not a
+    # register). The instance becomes live and a later register is idempotent.
+    r = Registry()
+    assert "a" not in r.instances
+    assert r.accept_snapshot(inst("a", seq=1), "e1", 1) is True
+    assert "a" in r.instances  # now registered
+    assert r.frame()[0].instance_id == "a"  # got a slot
+    assert r.register(inst("a", seq=1)) == 0  # a later register is idempotent
+
+
 def test_stale_press_does_not_focus_new_occupant():
     r = Registry()
     r.register(inst("a"))  # slot 0 gen 1
