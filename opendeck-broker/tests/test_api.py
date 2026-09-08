@@ -411,6 +411,21 @@ def test_register_assigns_slots_in_order(server):
     assert slots == [0, 1, 2, 3]  # sequential assignment
 
 
+def test_register_reuses_freed_slot(server):
+    # when an instance is freed (deleted), a new register reuses the freed
+    # slot (not a new one).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg1 = req("POST", f"{base}/v1/instances/register", token,
+                   {"directory": "/d/a", "alias": "a", "pid": 1001})
+    slot1 = reg1["slot"]
+    req("DELETE", f"{base}/v1/instances/{reg1['instanceId']}", token)  # free slot1
+    st, reg2 = req("POST", f"{base}/v1/instances/register", token,
+                   {"directory": "/d/b", "alias": "b", "pid": 1002})
+    assert reg2["slot"] == slot1  # the freed slot is reused
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
