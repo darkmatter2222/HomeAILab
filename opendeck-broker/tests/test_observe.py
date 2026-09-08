@@ -770,6 +770,35 @@ def test_running_tool_with_pending_and_running_question_plus_running_permission(
     assert len(st.pending_permissions) == 1  # running permission, unresolved
 
 
+def test_running_tool_with_full_non_resolved_matrix_counts_each_kind(tmp_path):
+    # a session with a running tool AND every non-resolved status of both request
+    # kinds (a pending question, a running question, a pending permission, a
+    # running permission): all four are unresolved, so the observer reports 2
+    # pending questions AND 2 pending permissions, and the running tool drives
+    # BUSY. This is the full non-resolved status matrix (pending x running) for
+    # both kinds in one snapshot -- the strongest assertion that the per-kind,
+    # per-status filter is correct.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/fullmatrix")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    for qid, qstatus in (("p-q-p", "pending"), ("p-q-r", "running")):
+        conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                     (qid, "s1", now_ms(),
+                      json.dumps({"type": "tool", "tool": "question", "state": {"status": qstatus}})))
+    for pid, pstatus in (("p-p-p", "pending"), ("p-p-r", "running")):
+        conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                     (pid, "s1", now_ms(),
+                      json.dumps({"type": "tool", "tool": "permission", "state": {"status": pstatus}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/fullmatrix"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_questions) == 2  # pending + running
+    assert len(st.pending_permissions) == 2  # pending + running
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
