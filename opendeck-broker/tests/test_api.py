@@ -478,6 +478,17 @@ def test_register_with_no_observer_still_registers(server):
     assert reg["slot"] in (0, 1, 2, 3, 4, 5)
 
 
+def test_register_with_windows_style_directory_still_registers(server):
+    # a Windows-style directory path still registers (the path is stored as-is).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "C:\\Users\\ryans\\proj", "alias": "winpath", "pid": 1})
+    assert st == 200
+    assert reg["instanceId"]  # registered successfully
+
+
 def test_register_with_trailing_slash_directory_still_registers(server):
     # a directory with a trailing slash still registers (the path is stored as-is).
     api, port, broker = server
