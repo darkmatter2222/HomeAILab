@@ -627,6 +627,39 @@ def test_running_tool_with_mixed_resolved_and_pending_requests(tmp_path):
     assert st.pending_permissions == []  # replied permission is resolved
 
 
+def test_running_tool_with_multiple_resolved_statuses_excluded(tmp_path):
+    # a session with a running tool AND one pending question AND one pending
+    # permission AND one replied question AND one error permission: the running
+    # tool drives BUSY, the pending question and permission are unresolved
+    # (has_pending_input True, 1 each), while BOTH the replied question and the
+    # error permission are resolved (not counted). Exercises the full resolved
+    # status set (replied for questions, error for permissions) alongside the
+    # pending ones in one snapshot.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/mix3")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-q-pending", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-p-pending", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "pending"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-q-replied", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "replied"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-p-error", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "error"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/mix3"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_questions) == 1  # only the pending question; replied excluded
+    assert len(st.pending_permissions) == 1  # only the pending permission; error excluded
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
