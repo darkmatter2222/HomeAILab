@@ -66,6 +66,19 @@ def test_start_uploads_six_black():
     # every key got an image (black frame)
 
 
+def test_broker_start_fails_when_device_cannot_connect():
+    # if the device fails to connect (the Mini is attached but not disabled in
+    # Elgato, or the wrong device), broker.start returns False so the entry point
+    # can report the failure and exit non-zero.
+    class FailingDevice(MockDevice):
+        def connect(self) -> bool:
+            return False
+
+    broker = Broker(registry=Registry(), device=FailingDevice(), lease_seconds=None)
+    assert broker.start() is False
+    assert broker.device.is_connected() is False
+
+
 def device_keys(broker):
     return broker.device.uploaded_count()
 
