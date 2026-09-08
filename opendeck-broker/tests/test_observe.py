@@ -202,6 +202,18 @@ def test_completed_tool_is_not_active(tmp_path):
     assert st.status is Status.IDLE
 
 
+def test_session_with_no_parts_is_idle(tmp_path):
+    # a live session with no parts (just launched, no activity yet) is idle --
+    # no recent part update, no active tool, no pending requests.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/fresh")
+    # no parts
+    conn.close()
+    st = DbObserver(db).snapshot_by_directory()["/d/fresh"]
+    assert st.status is Status.IDLE
+    assert not st.has_pending_input
+
+
 def test_missing_db_returns_empty(tmp_path):
     obs = DbObserver(tmp_path / "nope.db")
     assert obs.snapshot_by_directory() == {}
