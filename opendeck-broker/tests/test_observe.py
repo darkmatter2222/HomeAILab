@@ -495,6 +495,14 @@ def test_mixed_pending_and_resolved_questions(tmp_path):
     assert len(st.pending_questions) == 1  # only the pending one, not the completed one
 
 
+def test_missing_db_returns_empty_snapshot(tmp_path):
+    # a DbObserver pointing at a nonexistent DB file (OpenCode has not written its
+    # store yet) returns an empty snapshot -- no crash, no phantom session -- so
+    # the broker's refresh treats it as "no OpenCode running" and shows all black.
+    obs = DbObserver(tmp_path / "does-not-exist.db")
+    assert obs.snapshot_by_directory() == {}
+
+
 def test_multi_session_active_tool_folded(tmp_path):
     # a directory with two live sessions where one has a running tool (and the
     # other is idle): the active-tool count is folded across all live sessions in
