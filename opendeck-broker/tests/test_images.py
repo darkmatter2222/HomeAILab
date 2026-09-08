@@ -23,6 +23,18 @@ def test_black_render_matches_black_frame():
     assert render_key(DisplayAppearance.BLACK, size=16) == black_frame(16)
 
 
+def test_hex_to_rgb_converts_correctly():
+    # the hex->RGB conversion underpins the RAG palette; verify the documented
+    # colors decode to the exact byte triples (with or without the leading #).
+    from opendeck_broker.images import _hex_to_rgb
+
+    assert _hex_to_rgb("#2fd06f") == (0x2F, 0xD0, 0x6F)  # RUN green
+    assert _hex_to_rgb("#f5b13d") == (0xF5, 0xB1, 0x3D)  # IDLE/UNKNOWN amber
+    assert _hex_to_rgb("#ff5a4e") == (0xFF, 0x5A, 0x4E)  # INPUT red
+    assert _hex_to_rgb("#000000") == (0, 0, 0)          # BLACK
+    assert _hex_to_rgb("2fd06f") == (0x2F, 0xD0, 0x6F)  # leading # optional
+
+
 def test_probe_numbered_images_are_all_distinct():
     # tools/probe_device.numbered_image must produce six distinct images so
     # physical indexing is unambiguous (research build-order step 2).
