@@ -70,7 +70,7 @@ as passed from a simulated API test").
 | Broker restart: fresh registry, re-register before colors | `main.run` (new Registry), B-21 | B-21 | headless-verified |
 | Fallback cleanup within the configured lease window (research 14) | `registry.sweep_expired` + `broker.sweep` (per-tick, `lease_seconds`) | `test_registry::test_lease_sweep_frees_a_quiet_producer`, `test_lease_sweep_heartbeat_keeps_instance_alive` | headless-verified |
 | Graceful shutdown black-outs keys | `broker.stop` -> `upload_black_frame` | `test_e2e_mock::test_stop_blacks_out_colored_keys` | headless-verified |
-| Logon auto-start + restart-on-failure, interactive session | `tools/install-autostart.ps1` | parse-checked | **physical-pending** (run on host) |
+| Logon auto-start + restart-on-failure, interactive session | `tools/install-autostart.ps1` (supervisor `cd`s to package dir) | run-verified (installer + generated supervisor) | **physical-pending** (reboot to confirm) |
 
 ## Focus (research section 10)
 

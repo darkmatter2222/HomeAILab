@@ -24,6 +24,8 @@ $Supervisor = @"
 @echo off
 REM opendeck-broker supervisor: restart on failure, 5s backoff.
 setlocal
+REM run from the opendeck-broker package dir (this .bat lives in tools\).
+cd /d "%~dp0.."
 :loop
 "$Python" -m opendeck_broker.main
 echo opendeck-broker exited with %errorlevel% at %date% %time%
