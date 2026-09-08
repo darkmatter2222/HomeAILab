@@ -3,6 +3,7 @@ import os
 from opendeck_broker.broker import Broker
 from opendeck_broker.device.mock import MockDevice
 from opendeck_broker.focus.windows import FocusStatus, WindowsFocusAdapter
+from opendeck_broker.images import render_key
 from opendeck_broker.model import DisplayAppearance
 from opendeck_broker.opencode.adapter import OpenCodeAdapter
 from opendeck_broker.opencode.observe import SessionState
@@ -67,6 +68,23 @@ def test_start_uploads_six_black():
 
 def device_keys(broker):
     return broker.device.uploaded_count()
+
+
+def test_stop_blacks_out_colored_keys():
+    # research section 8: graceful shutdown black-outs the keys.
+    broker, adapter, device, obs = build(
+        states={"/d/a": SessionState(directory="/d/a", has_session=True, status="busy")}
+    )
+    broker.start()
+    iid, slot = adapter.register_launch("/d/a", "a", pid=LIVE)
+    adapter.refresh()
+    broker.render()
+    black = render_key(DisplayAppearance.BLACK, size=broker.image_size)
+    assert device.images[slot] != black  # the busy key is colored, not black
+    broker.stop()
+    for i in range(6):
+        assert device.images[i] == black  # every key is blacked out on shutdown
+    assert not broker._started
 
 
 def test_register_render_press_focus_cycle():
