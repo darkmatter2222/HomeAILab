@@ -207,6 +207,23 @@ def test_display_with_no_instances_is_all_black(server):
     assert all(s["appearance"] == "black" for s in disp["frame"])
 
 
+def test_register_overflow_when_all_slots_full(server):
+    # registering a 7th instance when all six slots are occupied overflows:
+    # the registry reports the overflow (no free slot), not a crash.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    for i in range(6):
+        st, _ = req("POST", f"{base}/v1/instances/register", token,
+                    {"directory": f"/d/{i}", "alias": f"a{i}", "pid": 1000 + i})
+        assert st == 200
+    # the 7th register overflows (no free slot)
+    st, res = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/overflow", "alias": "ovf", "pid": 2000})
+    assert st == 200
+    assert res["slot"] is None  # no free slot -> overflow
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
