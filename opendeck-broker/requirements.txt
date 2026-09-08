@@ -1,7 +1,8 @@
 # opendeck-broker (option A: direct HID Mini + Python broker)
 # Core (stdlib): sqlite3, http.server, ctypes, dataclasses
 # Required for physical device control:
-hidapi>=0.14.0          # python `hid` binding (needs hidapi.dll on Windows)
+hid>=1.0.9              # python `hid` binding (apmorton/pyhidapi, ctypes; needs hidapi.dll on Windows)
+                        #   (the C-extension `hidapi` package is an alternative that also provides `import hid`)
 Pillow>=10.0.0          # key image rendering
 psutil>=5.9.0           # process-exit observation (clears a slot when the TUI dies)
 # Optional (preferred over raw hid; pins the Mini image/key-report protocol):
