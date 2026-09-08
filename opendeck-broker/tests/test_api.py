@@ -271,6 +271,25 @@ def test_snapshot_for_deleted_instance_is_404(server):
     assert st == 404
 
 
+def test_display_slot_goes_black_when_instance_dies(server):
+    # when a registered instance's process dies, its slot renders black (the
+    # dead occupant is cleared from the frame).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/x", "alias": "x", "pid": 1})
+    slot = reg["slot"]
+    # alive -> non-black
+    st, disp = req("GET", f"{base}/v1/display", token)
+    assert disp["frame"][slot]["appearance"] != "black"
+    # kill the process -> the slot goes black on the next render
+    broker.registry.instances[reg["instanceId"]].live = False
+    broker.render()
+    st, disp = req("GET", f"{base}/v1/display", token)
+    assert disp["frame"][slot]["appearance"] == "black"
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
