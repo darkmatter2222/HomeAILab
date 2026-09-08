@@ -154,6 +154,26 @@ def test_press_does_not_change_registration_or_epoch():
     assert broker.registry.frame()[slot].appearance is appearance_before  # state unchanged
 
 
+def test_raw_hid_poll_emits_press_edges():
+    # the raw-HID fallback (no python-elgato-streamdeck) must surface key
+    # presses via poll(), since it has no push-based callback thread.
+    from opendeck_broker.device.hid_mini import ElgatoMiniHID
+
+    class FakeHid:
+        def __init__(self, reports):
+            self.reports = list(reports)
+
+        def read(self, n):
+            return self.reports.pop(0) if self.reports else b""
+
+    deck = ElgatoMiniHID()
+    deck._hid = FakeHid([b"\x00", b"\x03"])  # two buffered press reports (slots 0, 3)
+    seen = []
+    deck.set_key_press_handler(seen.append)
+    deck.poll()
+    assert seen == [0, 3]
+
+
 def test_concurrent_renders_are_serialized():
     # research section 11: serialize image uploads (main loop + REST API can
     # both render). Concurrent renders must not race the cache or leave a torn

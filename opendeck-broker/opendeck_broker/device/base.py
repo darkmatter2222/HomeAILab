@@ -41,6 +41,11 @@ class DeviceAdapter(ABC):
     def key_count(self) -> int:
         return self.rows * self.cols
 
+    def poll(self) -> None:
+        """Drain pending key edges. Push-based adapters (a library callback)
+        leave this as a no-op; raw-HID adapters read buffered reports here and
+        invoke the press handler. The broker loop calls this once per tick."""
+
     def set_key_press_handler(self, cb: KeyPress) -> None:
         """Register the callback invoked on a physical press edge (one edge per
         press; the adapter must not fire both down and up)."""

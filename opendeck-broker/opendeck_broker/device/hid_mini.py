@@ -129,3 +129,23 @@ class ElgatoMiniHID(DeviceAdapter):
             except Exception:
                 return False
         return False
+
+    def poll(self) -> None:
+        """Raw-HID fallback: read buffered key reports and emit press edges.
+
+        The python-elgato-streamdeck library pushes key-down events, so poll is
+        only needed here. Each buffered report carries the key index; we emit a
+        single edge per press (the broker de-dupes via the press queue).
+        """
+        if self._hid is None:
+            return
+        try:
+            while True:
+                data = self._hid.read(64)
+                if not data:
+                    break
+                idx = data[0]
+                if idx < self.rows * self.cols:
+                    self.on_key(idx)
+        except Exception:
+            pass

@@ -2,7 +2,7 @@
 
 Maps the key requirements in `docs/streamdeck-opencode-research.md` to where they
 are implemented, the test that proves them, and their status. "Headless-verified"
-means proven by `python -m pytest tests` (88 tests) without the physical Mini.
+means proven by `python -m pytest tests` (89 tests) without the physical Mini.
 "Physical-pending" means it needs the real Mini (and, for focus, a second
 foreground app); the probe tool is ready but the row is not yet claimed as passed
 per research section 14 ("Do not report the reboot, USB, or physical-press tests
@@ -62,6 +62,7 @@ as passed from a simulated API test").
 | Requirement | Where | Evidence | Status |
 |---|---|---|---|
 | Open Mini, explicitly upload six black (not assume `reset`) | `broker.start` -> `upload_black_frame` | `test_e2e_mock::test_start_uploads_six_black`, B-01 | headless-verified (physical = `probe_device.py`) |
+| Key presses captured on the raw-HID fallback path (no push callback) | `device.poll` (per-tick) draining buffered reports | `test_e2e_mock::test_raw_hid_poll_emits_press_edges` | headless-verified (physical = `probe_device.py`) |
 | Render identity+state into one image (no stale title) | `images.render_key` | `test_images`, B rows | headless-verified |
 | Cache identical images; don't re-upload unchanged keys over USB | `broker._upload` + `_rendered` cache | `test_e2e_mock::test_render_caches_identical_images` | headless-verified |
 | Serialize image uploads (main loop + REST API both render) (research 11) | `broker._render_lock` guarding `render`/`upload_black_frame` | `test_e2e_mock::test_concurrent_renders_are_serialized` | headless-verified |
@@ -99,7 +100,7 @@ as passed from a simulated API test").
 
 ```
 cd opendeck-broker
-python -m pytest tests -q     # 88 pass
+python -m pytest tests -q     # 89 pass
 python tools/acceptance.py    # 24/24 headless; writes acceptance-report.md
 python tools/selftest.py      # simulated end-to-end demo
 python tools/demo_live.py     # render the real frame from the live global DB

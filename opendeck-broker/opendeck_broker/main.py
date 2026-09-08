@@ -69,6 +69,7 @@ def run(config: Optional[Config] = None, use_mock: bool = False, tick: Optional[
         print(f"opendeck-broker on http://{stack.config.host}:{port}  device={stack.device.name}")
         ticks = 0
         while True:
+            stack.device.poll()
             stack.adapter.refresh()
             stack.broker.sweep()
             stack.broker.render()
