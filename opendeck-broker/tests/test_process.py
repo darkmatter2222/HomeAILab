@@ -67,6 +67,21 @@ def test_pid_reuse_guarded_by_start_time():
     assert is_alive(os.getpid(), live_start + 1) is False  # mismatched start time
 
 
+def test_process_matches_pid_and_start_time():
+    # dataclass-level reuse-guard identity (model.Process.matches): same pid +
+    # same verified start time is the same instance; a recycled pid (different
+    # start time) is not. Unknown start time falls back to pid equality.
+    from opendeck_broker.model import Process
+
+    a = Process(pid=4242, start_time=1000)
+    assert a.matches(Process(pid=4242, start_time=1000)) is True
+    assert a.matches(Process(pid=4242, start_time=2000)) is False  # recycled pid
+    assert a.matches(Process(pid=9999, start_time=1000)) is False  # different pid
+    # unknown start time on either side -> fall back to pid equality
+    assert a.matches(Process(pid=4242)) is True
+    assert Process(pid=4242).matches(Process(pid=4242, start_time=1234)) is True
+
+
 def test_recycled_pid_cleared_via_adapter_refresh():
     # end-to-end: the adapter pairs the pid with the verified creation time, so a
     # refresh sees a same-pid whose start time no longer matches (recycled) and
