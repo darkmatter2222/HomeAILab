@@ -2,7 +2,7 @@
 
 Maps the key requirements in `docs/streamdeck-opencode-research.md` to where they
 are implemented, the test that proves them, and their status. "Headless-verified"
-means proven by `python -m pytest tests` (99 tests) without the physical Mini.
+means proven by `python -m pytest tests` (100 tests) without the physical Mini.
 "Physical-pending" means it needs the real Mini (and, for focus, a second
 foreground app); the probe tool is ready but the row is not yet claimed as passed
 per research section 14 ("Do not report the reboot, USB, or physical-press tests
@@ -58,7 +58,7 @@ as passed from a simulated API test").
 | Child needs input -> owning TUI red, no extra slot | per-directory aggregation | B-12 | headless-verified |
 | Ordinary-prose question is IDLE, not INPUT | reducer (only structured requests = INPUT) | B-13 | headless-verified |
 | Recover pending requests from a snapshot after reconnect | `adapter.refresh` re-reads DB | B-21 | headless-verified |
-| UNKNOWN for untrustworthy/disconnected telemetry (not a lying green) | `model` (`telemetry_trusted`) + adapter | B-24 | headless-verified |
+| UNKNOWN for untrustworthy/disconnected telemetry (not a lying green) | `model` (`telemetry_trusted`), `registry.mark_untrusted` (adapter sets it when the DB read fails) | B-24, `test_registry::test_mark_untrusted_flips_appearance_to_unknown` | headless-verified |
 | Observer reads the live DB read-only (never grabs OpenCode's write lock) | `observe.DbObserver` (file URI `mode=ro`) | `test_observe::test_observer_opens_db_read_only`, live-DB read | headless-verified |
 
 ## Device / startup / recovery (research sections 3, 8)
@@ -105,7 +105,7 @@ as passed from a simulated API test").
 
 ```
 cd opendeck-broker
-python -m pytest tests -q     # 99 pass
+python -m pytest tests -q     # 100 pass
 python tools/acceptance.py    # 24/24 headless; writes acceptance-report.md
 python tools/selftest.py      # simulated end-to-end demo
 python tools/demo_live.py     # render the real frame from the live global DB

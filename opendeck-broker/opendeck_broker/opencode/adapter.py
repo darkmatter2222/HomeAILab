@@ -94,7 +94,10 @@ class OpenCodeAdapter:
                 continue
             inst = launch.instance
             st = states.get(_norm_dir(launch.directory))
-            inst.telemetry_trusted = db_ok
+            # bridge unavailable -> telemetry untrusted -> UNKNOWN, not a lying
+            # green/amber (research section 6); routed through the registry so the
+            # single-writer owns the instance's trust flag.
+            self.registry.mark_untrusted(inst.instance_id, db_ok)
             if st is None or not st.has_session:
                 # TUI open, no conversation yet -> IDLE (amber), not UNKNOWN.
                 inst.set_status(Status.IDLE)

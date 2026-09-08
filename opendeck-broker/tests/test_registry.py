@@ -27,6 +27,23 @@ def test_row_major_assignment_lowest_free_first():
     assert r.register(inst("d")) == 3
 
 
+def test_mark_untrusted_flips_appearance_to_unknown():
+    # research section 6: untrustworthy/disconnected telemetry -> UNKNOWN (not a
+    # lying green/amber). mark_untrusted is the single-writer's way to set it.
+    from opendeck_broker.model import DisplayAppearance, derive_display
+
+    r = Registry()
+    r.register(inst("a", status=Status.BUSY))  # would be RUN while trusted
+    a = r.instances["a"]
+    assert derive_display(a) is DisplayAppearance.RUN
+    r.mark_untrusted("a", False)  # bridge unavailable
+    assert derive_display(a) is DisplayAppearance.UNKNOWN
+    r.mark_untrusted("a", True)   # bridge back
+    assert derive_display(a) is DisplayAppearance.RUN
+    # an unknown instance id is a no-op (no crash)
+    r.mark_untrusted("nope", False)
+
+
 def test_no_compaction_when_one_closes():
     r = Registry()
     r.register(inst("a"))  # 0
