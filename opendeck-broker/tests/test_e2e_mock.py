@@ -112,6 +112,29 @@ def test_broker_sweep_with_lease_frees_quiet_producer():
     assert reg.frame()[0].appearance is DisplayAppearance.BLACK
 
 
+def test_maybe_reconnect_invalidate_cache_on_replug():
+    # a USB replug (disconnect->connect transition) is detected by
+    # maybe_reconnect(), which invalidates the render cache so the full frame is
+    # re-uploaded, not skipped as "already sent" (research section 8, B-22). A
+    # steady connected state returns False (no false positive).
+    broker, *_ = build()
+    device = broker.device
+    device.connect()
+    # the first connect is itself a False->True transition (the broker starts
+    # unconnected), so the first maybe_reconnect reports it and syncs the state
+    assert broker.maybe_reconnect() is True
+    assert broker.maybe_reconnect() is False  # steady connected: no false positive
+    # prime the render cache with a real render
+    broker.render()
+    assert len(broker._rendered) > 0
+    # simulate a USB replug: disconnect then reconnect
+    device.close()
+    broker.maybe_reconnect()  # disconnect observed (no connect transition yet)
+    device.connect()
+    assert broker.maybe_reconnect() is True  # disconnect->connect transition
+    assert len(broker._rendered) == 0  # cache invalidated
+
+
 def test_render_skips_identical_reuploads():
     # the broker's per-key render cache (research section 11: avoid unnecessary
     # USB traffic) means a render() that produces the same frame twice uploads
