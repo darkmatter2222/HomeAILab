@@ -465,6 +465,19 @@ def test_register_with_special_chars_in_directory_still_registers(server):
     assert reg["instanceId"]  # registered successfully
 
 
+def test_register_with_no_observer_still_registers(server):
+    # when the observer has no DB (no sessions), registering still succeeds
+    # (the slot starts idle -- no observer data to drive it busy).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/noobserver", "alias": "noobs", "pid": 1})
+    assert st == 200
+    assert reg["instanceId"]  # registered successfully
+    assert reg["slot"] in (0, 1, 2, 3, 4, 5)
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
