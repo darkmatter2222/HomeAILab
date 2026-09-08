@@ -110,6 +110,21 @@ def test_api_body_malformed_valid_and_empty():
     assert h3._body() == {}
 
 
+def test_unknown_paths_are_404_and_wrong_token_is_401(server):
+    # the routing fall-throughs: a GET/POST to an unknown path is a 404 (with a
+    # valid token), and a request with the wrong/absent token is a 401 before
+    # routing (the loopback API is token-gated, not path-gated).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    # unknown GET path -> 404
+    assert req("GET", f"{base}/v1/nope", token)[0] == 404
+    # unknown POST path -> 404
+    assert req("POST", f"{base}/v1/nope", token, {"x": 1})[0] == 404
+    # wrong token -> 401 (even on a real path)
+    assert req("GET", f"{base}/v1/display", "wrong-token")[0] == 401
+
+
 def test_register_with_empty_body_uses_defaults(server):
     # the register endpoint tolerates an empty body (a producer that sends no
     # directory/alias/pid): it still creates an instance with the defaults and
