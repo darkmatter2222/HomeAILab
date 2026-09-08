@@ -78,8 +78,11 @@ def _alive_windows(pid: int, start_time: Optional[int]) -> bool:
     h = k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
     if not h:
         err = k.GetLastError()
-        # ERROR_FILE_NOT_FOUND (2) => dead; ERROR_ACCESS_DENIED (5) => alive.
-        return err != 2
+        # A failed OpenProcess means the process is gone, EXCEPT when it exists
+        # but we lack permission to query it (ERROR_ACCESS_DENIED, 5). A reaped
+        # or invalid pid can surface as ERROR_FILE_NOT_FOUND (2) or
+        # ERROR_INVALID_PARAMETER (87); both are dead.
+        return err == 5
     code = ctypes.c_ulong()
     ok = k.GetExitCodeProcess(h, ctypes.byref(code))
     k.CloseHandle(h)

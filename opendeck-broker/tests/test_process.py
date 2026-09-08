@@ -37,6 +37,17 @@ def test_is_alive_unknown_pid_is_alive():
     assert is_alive(-1) is True
 
 
+def test_is_alive_windows_fallback_without_psutil(monkeypatch):
+    # when psutil is unavailable, the Windows ctypes fallback must still report
+    # a live process as alive, a dead pid as dead, and an unknown pid as safe.
+    from opendeck_broker import process as proc
+
+    monkeypatch.setattr(proc, "_psutil_available", lambda: False)
+    assert proc.is_alive(os.getpid()) is True
+    assert proc.is_alive(dead_pid()) is False
+    assert proc.is_alive(0) is True
+
+
 def test_dead_process_clears_slot_on_refresh():
     reg = Registry()
     adapter = OpenCodeAdapter(reg, FakeObserver())
