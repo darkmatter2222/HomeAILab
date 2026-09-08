@@ -335,8 +335,10 @@ def r_device_reconnect_restores_full_frame(h: Harness) -> None:
     newdev.connect()  # USB reconnect re-opens the device
     h.broker.device = newdev
     h.broker.device.set_key_press_handler(h.broker.on_key)
+    # research section 8: on USB reconnect, invalidate the render cache and
+    # upload the complete desired frame.
+    h.broker.invalidate_render_cache()
     h.broker.render()
-    # a reconnect must re-upload the complete six-slot frame (all keys get an image)
     assert newdev.uploaded_count() == 6
     assert all(newdev.images.get(i) is not None for i in range(6))
 

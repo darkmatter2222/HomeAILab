@@ -41,6 +41,9 @@ class Broker:
         self._press_queue: deque = deque()
         # diagnostics: last focus attempts
         self.focus_log: list[dict] = []
+        # slot -> last uploaded image bytes; identical re-renders are skipped so
+        # we don't hammer the device over USB (research section 11).
+        self._rendered: dict[int, bytes] = {}
         self._started = False
 
     # ------------------------------------------------------------------ #
@@ -57,6 +60,9 @@ class Broker:
             # Press edges are captured here (reader thread) and processed on the
             # broker loop via process_presses().
             self.device.set_key_press_handler(self.on_key)
+        # A (re)connected device starts blank: forget the render cache so the
+        # full frame is re-uploaded, not skipped as "already sent".
+        self.invalidate_render_cache()
         self.upload_black_frame()
         self._started = True
         return True
@@ -71,22 +77,35 @@ class Broker:
             self._started = False
 
     # ------------------------------------------------------------------ #
+    def invalidate_render_cache(self) -> None:
+        """Forget per-key render state (USB reconnect, device swap, restart)."""
+        self._rendered.clear()
+
+    def _upload(self, slot: int, image: bytes) -> bool:
+        """Upload a key image unless it is byte-identical to what's already on
+        that key. Returns True if an upload happened."""
+        if self._rendered.get(slot) == image:
+            return False
+        self._rendered[slot] = image
+        return self.device.set_key_image(slot, image)
+
     def upload_black_frame(self) -> None:
         if self.device is None:
             return
         black = render_key(DisplayAppearance.BLACK, size=self.image_size)
         for i in range(self.registry.slots):
-            self.device.set_key_image(i, black)
+            self._upload(i, black)
 
     # ------------------------------------------------------------------ #
     def render(self) -> None:
-        """Push the desired six-slot frame to the device, serialized per key and
-        cached so identical images are not re-uploaded (USB traffic)."""
+        """Push the desired six-slot frame, serialized per key and cached so
+        identical images are not re-uploaded (research section 11: avoid
+        unnecessary USB traffic)."""
         if self.device is None:
             return
         for ss in self.registry.frame():
             image = render_key(ss.appearance, ss.label, size=self.image_size)
-            self.device.set_key_image(ss.slot, image)
+            self._upload(ss.slot, image)
 
     # ------------------------------------------------------------------ #
     def on_key(self, slot: int) -> None:

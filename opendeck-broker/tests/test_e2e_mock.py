@@ -90,6 +90,28 @@ def test_register_render_press_focus_cycle():
     assert status_after is DisplayAppearance.IDLE  # press did not mutate state
 
 
+def test_render_caches_identical_images():
+    # research section 11: don't re-upload an unchanged key over USB.
+    broker, adapter, device, obs = build(
+        states={"/d/a": SessionState(directory="/d/a", has_session=True, status="busy")}
+    )
+    broker.start()
+    iid, slot = adapter.register_launch("/d/a", "a", pid=LIVE)
+    adapter.refresh()
+    broker.render()
+    first = device.set_calls
+    assert first >= 1
+    # no state change -> a second render uploads nothing new
+    adapter.refresh()
+    broker.render()
+    assert device.set_calls == first
+    # a real state change -> exactly that key is re-uploaded
+    obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True)  # -> idle
+    adapter.refresh()
+    broker.render()
+    assert device.set_calls == first + 1
+
+
 def test_press_on_black_key_does_nothing():
     broker, adapter, device, obs = build(windows=[])
     broker.start()

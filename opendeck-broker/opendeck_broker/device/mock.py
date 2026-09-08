@@ -25,6 +25,8 @@ class MockDevice(DeviceAdapter):
         self.images: dict[int, bytes] = {}
         # every press edge the broker observed, in order: (slot,)
         self.presses: list[int] = []
+        # count of set_key_image CALLS (upload ops), to detect skipped re-uploads
+        self.set_calls: int = 0
 
     def connect(self) -> bool:
         self._connected = True
@@ -37,6 +39,7 @@ class MockDevice(DeviceAdapter):
         if not self._connected:
             return False
         self.images[slot] = image
+        self.set_calls += 1
         return True
 
     def inject_press(self, slot: int) -> None:
