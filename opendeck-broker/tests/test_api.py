@@ -317,6 +317,22 @@ def test_delete_unknown_instance_is_404(server):
     assert st == 404
 
 
+def test_snapshot_input_appearance_with_pending_question(server):
+    # a snapshot with a pending question renders the slot as "input" (the
+    # instance is waiting for the user's answer).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/x", "alias": "x", "pid": 1})
+    iid, slot = reg["instanceId"], reg["slot"]
+    st, snap = req("PUT", f"{base}/v1/instances/{iid}/snapshot", token,
+                   {"status": "idle", "pendingQuestionIds": ["q1"]})
+    assert st == 200 and snap["applied"] is True
+    st, disp = req("GET", f"{base}/v1/display", token)
+    assert disp["frame"][slot]["appearance"] == "input"
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
