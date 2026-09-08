@@ -1,6 +1,15 @@
 import os
+from pathlib import Path
 
 from opendeck_broker.config import Config
+
+
+def test_db_explicit_path_and_default(monkeypatch):
+    # db() honors an explicit db_path; with none it falls back to the OpenCode
+    # global DB location (default_db_path).
+    monkeypatch.delenv("OPENCODE_DB", raising=False)
+    assert Config(db_path="/explicit/oc.db").db() == Path("/explicit/oc.db")
+    assert Config().db().name == "opencode.db"  # no explicit path -> default location
 
 
 def test_from_env_reads_documented_vars(monkeypatch):
