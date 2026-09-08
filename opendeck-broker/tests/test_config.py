@@ -45,6 +45,27 @@ def test_defaults(monkeypatch):
     assert c.device_serial is None
     assert c.heartbeat_seconds == 2.0
     assert c.lease_seconds == 10.0
+    from opendeck_broker.images import DEFAULT_KEY_SIZE
+
+    assert c.image_size == DEFAULT_KEY_SIZE  # 144, the Mini resolution
+
+
+def test_malformed_numeric_env_fails_fast(monkeypatch):
+    # a non-numeric port (or heartbeat) env value is a config error: from_env
+    # raises rather than silently falling back to a wrong value.
+    monkeypatch.setenv("OPENDECK_BROKER_PORT", "not-a-port")
+    try:
+        Config.from_env()
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
+    monkeypatch.setenv("OPENDECK_BROKER_PORT", "8899")
+    monkeypatch.setenv("OPENDECK_HEARTBEAT_S", "not-a-number")
+    try:
+        Config.from_env()
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
 
 
 def test_tick_default_meets_500ms_state_target(monkeypatch):
