@@ -495,6 +495,24 @@ def test_mixed_pending_and_resolved_questions(tmp_path):
     assert len(st.pending_questions) == 1  # only the pending one, not the completed one
 
 
+def test_running_tool_with_completed_question(tmp_path):
+    # a session with a running tool AND a completed question: the running tool
+    # drives BUSY (green) and the completed question is NOT pending (the question
+    # was answered), so has_pending_input is False -- the status is BUSY, not INPUT.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/rt")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-quest", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "completed"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/rt"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is False
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
