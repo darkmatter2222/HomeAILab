@@ -369,8 +369,18 @@ def r_seventh_instance_overflow(h: Harness) -> None:
 
 
 def r_bridge_unavailable_unknown_not_indefinite(h: Harness) -> None:
+    # research section 14: "Bridge unavailable -> display does not lie
+    # indefinitely." When the DB read fails, the adapter marks telemetry
+    # untrusted -> UNKNOWN (amber "?"), not a stale green.
     _, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
-    h.broker.registry.mark_untrusted("a" if False else list(h.adapter.launches())[0].instance_id, False)
+    h.adapter.refresh(); h.broker.render()
+
+    class BrokenObserver:
+        def snapshot_by_directory(self):
+            raise RuntimeError("db gone")
+
+    h.adapter.observer = BrokenObserver()
+    h.adapter.refresh()  # catches the exception -> telemetry_trusted = False
     h.broker.render()
     assert h.ap(s) is DisplayAppearance.UNKNOWN  # amber "?", not a lying green
 
