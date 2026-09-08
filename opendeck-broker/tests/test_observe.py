@@ -11,6 +11,17 @@ def now_ms():
     return int(time.time() * 1000)
 
 
+def test_has_pending_input_permissions_or_questions():
+    # SessionState.has_pending_input is True for either pending permissions OR
+    # pending questions (both are unresolved structured requests -> INPUT), and
+    # False when neither is outstanding.
+    from opendeck_broker.opencode.observe import SessionState
+
+    assert SessionState(directory="/d", pending_permissions=["p1"]).has_pending_input
+    assert SessionState(directory="/d", pending_questions=["q1"]).has_pending_input
+    assert SessionState(directory="/d").has_pending_input is False
+
+
 def test_norm_dir_normalizes_paths():
     # the observer/adapter key directories by a normalized path: None -> "",
     # backslashes -> forward slashes, trailing slash stripped.
