@@ -151,6 +151,30 @@ def test_running_tool_stays_busy_without_fresh_parts(tmp_path):
     assert st.status is Status.BUSY
 
 
+def test_pending_tool_stays_busy_without_fresh_parts(tmp_path):
+    # the active_tool count includes both 'running' and 'pending': a queued tool
+    # (not yet running) also keeps the TUI busy even without fresh parts.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/pendingtool")
+    old = now_ms() - 60_000
+    add_part(conn, "s1", {"type": "tool", "tool": "bash", "state": {"status": "pending"}}, upd=old)
+    conn.close()
+    st = DbObserver(db).snapshot_by_directory()["/d/pendingtool"]
+    assert st.status is Status.BUSY
+
+
+def test_completed_tool_is_not_active(tmp_path):
+    # a tool that has completed (status not running/pending) is NOT active: with
+    # no fresh parts the session reads idle.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/done")
+    old = now_ms() - 60_000
+    add_part(conn, "s1", {"type": "tool", "tool": "bash", "state": {"status": "completed"}}, upd=old)
+    conn.close()
+    st = DbObserver(db).snapshot_by_directory()["/d/done"]
+    assert st.status is Status.IDLE
+
+
 def test_missing_db_returns_empty(tmp_path):
     obs = DbObserver(tmp_path / "nope.db")
     assert obs.snapshot_by_directory() == {}
