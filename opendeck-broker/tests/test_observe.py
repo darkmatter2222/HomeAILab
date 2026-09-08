@@ -686,6 +686,34 @@ def test_running_tool_with_two_pending_questions_counts_both(tmp_path):
     assert st.pending_permissions == []
 
 
+def test_running_tool_with_two_pending_each_kind_counts_all(tmp_path):
+    # a session with a running tool AND two pending questions AND two pending
+    # permissions (a heavily-interacting TUI): the running tool drives BUSY, and
+    # BOTH kinds are counted independently (has_pending_input True, 2 pending
+    # questions AND 2 pending permissions). The two per-kind tallies are computed
+    # in separate SQL subqueries and never cross-contaminate, even at higher
+    # counts.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/twoboth")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    for i in (1, 2):
+        conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                     (f"p-q{i}", "s1", now_ms(),
+                      json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    for i in (1, 2):
+        conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                     (f"p-p{i}", "s1", now_ms(),
+                      json.dumps({"type": "tool", "tool": "permission", "state": {"status": "pending"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/twoboth"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_questions) == 2
+    assert len(st.pending_permissions) == 2
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
