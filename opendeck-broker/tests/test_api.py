@@ -366,6 +366,21 @@ def test_snapshot_error_state_still_renders(server):
     assert disp["frame"][slot]["appearance"] == "run"
 
 
+def test_display_slot_shows_unknown_when_telemetry_untrusted(server):
+    # when the instance's telemetry is not trustworthy (transport disconnected),
+    # the slot renders "unknown" (amber with "?"), not idle or run.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/x", "alias": "x", "pid": 1})
+    iid, slot = reg["instanceId"], reg["slot"]
+    broker.registry.instances[iid].telemetry_trusted = False
+    broker.render()
+    st, disp = req("GET", f"{base}/v1/display", token)
+    assert disp["frame"][slot]["appearance"] == "unknown"
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
