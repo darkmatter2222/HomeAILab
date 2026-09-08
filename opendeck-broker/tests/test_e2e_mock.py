@@ -336,6 +336,18 @@ def test_base_press_handler_dispatch():
     assert seen == [3]
 
 
+def test_connect_fails_cleanly_when_no_backend(monkeypatch):
+    # with neither elgato_streamdeck nor hid importable, connect() returns False
+    # (not a crash) so the entry point can report "attach the Mini" and exit.
+    from opendeck_broker.device.hid_mini import ElgatoMiniHID
+
+    monkeypatch.setattr(ElgatoMiniHID, "library_available", classmethod(lambda cls: False))
+    monkeypatch.setattr(ElgatoMiniHID, "hid_available", classmethod(lambda cls: False))
+    deck = ElgatoMiniHID()
+    assert deck.connect() is False
+    assert deck.is_connected() is False
+
+
 def test_device_key_count_is_six():
     # the Mini has 6 keys (2 rows x 3 cols); key_count() is the source of truth
     # for the render loop (it uploads exactly this many keys) and must agree for
