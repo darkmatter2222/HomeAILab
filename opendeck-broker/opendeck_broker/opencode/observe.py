@@ -32,12 +32,12 @@ SELECT s.id, s.directory, s.title,
   (SELECT COUNT(*) FROM part p WHERE p.session_id = s.id
      AND json_extract(p.data,'$.type')='tool'
      AND json_extract(p.data,'$.tool')='question'
-     AND json_extract(p.data,'$.state.status') != 'completed'
-   ) AS pending_q,
+     AND json_extract(p.data,'$.state.status') NOT IN ('completed','error','replied','rejected')
+    ) AS pending_q,
   (SELECT COUNT(*) FROM part p WHERE p.session_id = s.id
      AND json_extract(p.data,'$.type')='tool'
      AND json_extract(p.data,'$.tool')='permission'
-     AND json_extract(p.data,'$.state.status') != 'completed'
+     AND json_extract(p.data,'$.state.status') NOT IN ('completed','error','replied','rejected')
     ) AS pending_perm,
   (SELECT COUNT(*) FROM part p WHERE p.session_id = s.id
      AND json_extract(p.data,'$.type')='tool'

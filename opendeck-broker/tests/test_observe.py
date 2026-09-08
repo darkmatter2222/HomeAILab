@@ -61,6 +61,16 @@ def test_completed_question_is_not_input(tmp_path):
     assert snap["/proj/a"].pending_questions == []
 
 
+def test_errored_question_is_not_pending(tmp_path):
+    # research section 6: "session.error -> do not invent a pending approval."
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/proj/a")
+    add_part(conn, "s1", {"type": "tool", "tool": "question", "state": {"status": "error"}})
+    snap = DbObserver(db).snapshot_by_directory()
+    assert snap["/proj/a"].pending_questions == []
+    assert not snap["/proj/a"].has_pending_input
+
+
 def test_recent_part_update_is_busy(tmp_path):
     db, conn = make_db(tmp_path)
     add_session(conn, "s1", "/proj/b")

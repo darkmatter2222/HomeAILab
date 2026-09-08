@@ -2,7 +2,7 @@
 
 Maps the key requirements in `docs/streamdeck-opencode-research.md` to where they
 are implemented, the test that proves them, and their status. "Headless-verified"
-means proven by `python -m pytest tests` (90 tests) without the physical Mini.
+means proven by `python -m pytest tests` (91 tests) without the physical Mini.
 "Physical-pending" means it needs the real Mini (and, for focus, a second
 foreground app); the probe tool is ready but the row is not yet claimed as passed
 per research section 14 ("Do not report the reboot, USB, or physical-press tests
@@ -50,6 +50,7 @@ as passed from a simulated API test").
 | Requirement | Where | Evidence | Status |
 |---|---|---|---|
 | `idle` must not erase outstanding requests | `model.Instance.set_status` + reducer | `test_reducer::test_idle_does_not_erase_outstanding_requests` | headless-verified |
+| An errored question/permission is not a pending approval (research 6) | `observe.DbObserver` (excludes terminal states) | `test_observe::test_errored_question_is_not_pending` | headless-verified |
 | INPUT > RUN > IDLE precedence | `model.derive_display` | `test_reducer` | headless-verified |
 | Child completes while parent runs -> parent stays green | per-directory aggregation | B-11 | headless-verified |
 | Child needs input -> owning TUI red, no extra slot | per-directory aggregation | B-12 | headless-verified |
@@ -101,7 +102,7 @@ as passed from a simulated API test").
 
 ```
 cd opendeck-broker
-python -m pytest tests -q     # 90 pass
+python -m pytest tests -q     # 91 pass
 python tools/acceptance.py    # 24/24 headless; writes acceptance-report.md
 python tools/selftest.py      # simulated end-to-end demo
 python tools/demo_live.py     # render the real frame from the live global DB
