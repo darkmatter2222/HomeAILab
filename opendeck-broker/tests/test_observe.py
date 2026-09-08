@@ -495,6 +495,18 @@ def test_mixed_pending_and_resolved_questions(tmp_path):
     assert len(st.pending_questions) == 1  # only the pending one, not the completed one
 
 
+def test_archived_session_is_excluded(tmp_path):
+    # a session that has been archived (time_archived set) is no longer a live
+    # TUI: the observer's query filters it out, so its directory does not appear
+    # in the snapshot at all (a stale TUI must not hold a slot).
+    db, conn = make_db(tmp_path)
+    add_session(conn, "live", "/d/live")
+    add_session(conn, "arch", "/d/arch", archived=now_ms())
+    snap = DbObserver(db).snapshot_by_directory()
+    assert "/d/live" in snap
+    assert "/d/arch" not in snap
+
+
 def test_default_db_path_honors_env_and_falls_back(monkeypatch):
     # default_db_path() honors the OPENCODE_DB env var (a non-default store) and
     # falls back to the global OpenCode DB location when unset -- the broker's
