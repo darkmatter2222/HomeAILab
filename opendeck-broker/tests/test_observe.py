@@ -799,6 +799,36 @@ def test_running_tool_with_full_non_resolved_matrix_counts_each_kind(tmp_path):
     assert len(st.pending_permissions) == 2  # pending + running
 
 
+def test_running_tool_with_full_matrix_plus_resolved_excluded(tmp_path):
+    # a session with a running tool AND the full non-resolved matrix (pending +
+    # running for both kinds) AND one resolved question (replied) AND one resolved
+    # permission (rejected): the running tool drives BUSY, the four non-resolved
+    # requests are counted (2 pending questions AND 2 pending permissions), and
+    # BOTH the replied question and the rejected permission are excluded. This is
+    # the complete status space (all 6 distinct statuses across both kinds) in a
+    # single snapshot -- the strongest single assertion that the per-kind,
+    # per-status filter partitions correctly.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/fullplus")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    for qid, qstatus in (("p-q-p", "pending"), ("p-q-r", "running"), ("p-q-replied", "replied")):
+        conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                     (qid, "s1", now_ms(),
+                      json.dumps({"type": "tool", "tool": "question", "state": {"status": qstatus}})))
+    for pid, pstatus in (("p-p-p", "pending"), ("p-p-r", "running"), ("p-p-rejected", "rejected")):
+        conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                     (pid, "s1", now_ms(),
+                      json.dumps({"type": "tool", "tool": "permission", "state": {"status": pstatus}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/fullplus"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_questions) == 2  # pending + running; replied excluded
+    assert len(st.pending_permissions) == 2  # pending + running; rejected excluded
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
