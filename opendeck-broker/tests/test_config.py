@@ -38,6 +38,19 @@ def test_defaults(monkeypatch):
     assert c.lease_seconds == 10.0
 
 
+def test_tick_default_meets_500ms_state_target(monkeypatch):
+    monkeypatch.delenv("OPENDECK_TICK_S", raising=False)
+    c = Config.from_env()
+    # research section 14: state updates within 500 ms, exit clears within 1 s
+    assert c.tick_seconds <= 0.5
+    assert c.tick_seconds > 0
+
+
+def test_tick_env_override(monkeypatch):
+    monkeypatch.setenv("OPENDECK_TICK_S", "0.25")
+    assert Config.from_env().tick_seconds == 0.25
+
+
 def test_token_is_stable_and_local(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENDECK_BROKER_HOME", str(tmp_path))
     c = Config()

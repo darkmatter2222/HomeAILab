@@ -32,6 +32,9 @@ class Config:
     device_serial: Optional[str] = None
     heartbeat_seconds: float = 2.0
     lease_seconds: float = 10.0
+    # Refresh tick. 0.5 s meets the research section-14 target of state updates
+    # within 500 ms and process-exit clears within 1 s.
+    tick_seconds: float = 0.5
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -43,6 +46,7 @@ class Config:
             device_serial=os.environ.get("OPENDECK_MINI_SERIAL") or None,
             heartbeat_seconds=float(os.environ.get("OPENDECK_HEARTBEAT_S", "2")),
             lease_seconds=float(os.environ.get("OPENDECK_LEASE_S", "10")),
+            tick_seconds=float(os.environ.get("OPENDECK_TICK_S", "0.5")),
         )
 
     def token(self) -> str:

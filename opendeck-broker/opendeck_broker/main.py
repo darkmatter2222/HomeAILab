@@ -49,8 +49,11 @@ def build_stack(config: Optional[Config] = None, use_mock: bool = False) -> Stac
     return Stack(config=config, broker=broker, adapter=adapter, device=device, api=api)
 
 
-def run(config: Optional[Config] = None, use_mock: bool = False, tick: float = 1.0, max_ticks: Optional[int] = None) -> int:
+def run(config: Optional[Config] = None, use_mock: bool = False, tick: Optional[float] = None, max_ticks: Optional[int] = None) -> int:
+    config = config or Config.from_env()
     stack = build_stack(config=config, use_mock=use_mock)
+    if tick is None:
+        tick = config.tick_seconds
     lock = BrokerLock()
     if not lock.acquire():
         print("another opendeck-broker is already running; exiting")
