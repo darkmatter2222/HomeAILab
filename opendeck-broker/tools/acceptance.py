@@ -101,6 +101,15 @@ class Row:
 def r_cold_reboot_no_opencode(h: Harness) -> None:
     for s in range(6):
         assert h.ap(s) is DisplayAppearance.BLACK, h.ap(s)
+    # "no old sessions resurrected": the DB may still hold a session from before
+    # the reboot, but with no TUI registered it must not bring a key back.
+    h.obs.states["/d/stale"] = SessionState(
+        directory="/d/stale", has_session=True, status="busy"
+    )
+    h.adapter.refresh()
+    h.broker.render()
+    for s in range(6):
+        assert h.ap(s) is DisplayAppearance.BLACK, (s, h.ap(s))
 
 
 def r_launch_one_home_screen(h: Harness) -> None:
