@@ -290,6 +290,22 @@ def test_missing_db_returns_empty(tmp_path):
     assert obs.snapshot_by_directory() == {}
 
 
+def test_replied_permission_is_not_pending(tmp_path):
+    # a permission part whose status is "replied" (one of the resolved statuses)
+    # is not counted as pending -- only unresolved ones (asked/pending) are INPUT.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/replied")
+    conn.execute(
+        "INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+        ("p-rep", "s1", now_ms(),
+         json.dumps({"type": "tool", "tool": "permission", "state": {"status": "replied"}})),
+    )
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/replied"]
+    assert st.pending_permissions == []
+    assert not st.has_pending_input
+
+
 def test_pending_permission_is_input(tmp_path):
     db, conn = make_db(tmp_path)
     add_session(conn, "s1", "/proj/e")
