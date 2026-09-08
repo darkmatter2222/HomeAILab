@@ -66,6 +66,26 @@ def test_distinct_appearances_produce_distinct_images():
     assert len(set(imgs)) == 5
 
 
+def test_render_key_default_size_is_144_and_empty_identity_ok():
+    # the default key size is 144 (the Mini resolution); an empty identity is a
+    # valid key (label-only, no second line).
+    from opendeck_broker.images import DEFAULT_KEY_SIZE
+
+    assert DEFAULT_KEY_SIZE == 144
+    img = render_key(DisplayAppearance.RUN)  # no identity, no explicit label
+    assert len(img) == 144 * 144 * 3
+    assert any(b != 0 for b in img)  # non-black
+
+
+def test_render_key_custom_label_differs_from_default():
+    # an explicit label overrides the state word; a custom label must render a
+    # valid image distinct from the default-label render for the same appearance.
+    custom = render_key(DisplayAppearance.RUN, "x", label="CUSTOM", size=64)
+    default = render_key(DisplayAppearance.RUN, "x", size=64)
+    assert len(custom) == 64 * 64 * 3
+    assert custom != default
+
+
 def test_render_is_deterministic():
     assert render_key(DisplayAppearance.RUN, "homeai") == render_key(DisplayAppearance.RUN, "homeai")
 
