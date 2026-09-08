@@ -34,6 +34,20 @@ def test_register_launch_gets_slot_and_identity():
     assert inst.process.pid == 4242
 
 
+def test_register_launch_uses_provided_focus_target():
+    # when a focusTarget with an opaqueId is provided (the realistic launcher
+    # path), register_launch uses it as the marker -- not a generated one -- so
+    # a later press resolves to this exact window.
+    reg, adapter = adapter_with({})
+    iid, slot = adapter.register_launch(
+        "/d/a", "a", pid=LIVE,
+        focus_target={"kind": "windows-terminal-window", "opaqueId": "opencode:custom-marker"},
+    )
+    inst = reg.instances[iid]
+    assert inst.focus_target["opaqueId"] == "opencode:custom-marker"
+    assert slot == 0
+
+
 def test_refresh_pushes_busy_to_green():
     reg, adapter = adapter_with({"/d/a": SessionState(directory="/d/a", has_session=True, status=Status.BUSY)})
     iid, _ = adapter.register_launch("/d/a", "a", pid=LIVE)
