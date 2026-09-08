@@ -120,6 +120,23 @@ def test_run_entry_point_tick_loop_and_lock_cleanup(tmp_path):
     lock.release()
 
 
+def test_build_stack_selects_real_or_mock_device(tmp_path):
+    # build_stack's device branch: use_mock=True -> MockDevice (headless),
+    # use_mock=False -> the real ElgatoMiniHID (whose constructor does not open
+    # the HID handle, so it can be built headless). Both wire the same broker.
+    from opendeck_broker.device.hid_mini import ElgatoMiniHID
+    from opendeck_broker.device.mock import MockDevice
+
+    db = make_db(tmp_path)
+    mock_stack = build_stack(config=Config(db_path=db, port=0), use_mock=True)
+    assert isinstance(mock_stack.device, MockDevice)
+    real_stack = build_stack(config=Config(db_path=db, port=0), use_mock=False)
+    assert isinstance(real_stack.device, ElgatoMiniHID)
+    # both stacks expose the same broker surface
+    assert real_stack.broker is not None
+    assert real_stack.adapter is not None
+
+
 def test_main_cli_wires_mock_port_once(monkeypatch):
     # the CLI entry point must wire --mock / --port / --once into run().
     from opendeck_broker import main as m
