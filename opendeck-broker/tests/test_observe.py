@@ -660,6 +660,32 @@ def test_running_tool_with_multiple_resolved_statuses_excluded(tmp_path):
     assert len(st.pending_permissions) == 1  # only the pending permission; error excluded
 
 
+def test_running_tool_with_two_pending_questions_counts_both(tmp_path):
+    # a session with a running tool AND two pending questions (a realistic
+    # "model asked follow-up A, then follow-up B" situation): the running tool
+    # drives BUSY, and BOTH pending questions are counted independently
+    # (has_pending_input True, pending_questions length 2). The per-kind tally is
+    # a COUNT, not a boolean -- the reducer shows INPUT either way, but the count
+    # is what the diagnostics/observer expose for a multi-pending TUI.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/twopq")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-q1", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-q2", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/twopq"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_questions) == 2
+    assert st.pending_permissions == []
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
