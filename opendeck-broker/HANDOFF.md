@@ -2,7 +2,7 @@
 
 Maps the key requirements in `docs/streamdeck-opencode-research.md` to where they
 are implemented, the test that proves them, and their status. "Headless-verified"
-means proven by `python -m pytest tests` (91 tests) without the physical Mini.
+means proven by `python -m pytest tests` (92 tests) without the physical Mini.
 "Physical-pending" means it needs the real Mini (and, for focus, a second
 foreground app); the probe tool is ready but the row is not yet claimed as passed
 per research section 14 ("Do not report the reboot, USB, or physical-press tests
@@ -36,7 +36,7 @@ as passed from a simulated API test").
 
 | Requirement | Where | Evidence | Status |
 |---|---|---|---|
-| Fresh UUID per launch; immutable identity | `opencode/adapter.register_launch` | `test_protocol` | headless-verified |
+| Fresh UUID per launch; immutable identity | `opencode/adapter.register_launch` | `test_protocol::test_each_launch_gets_a_fresh_instance_id` | headless-verified |
 | Pair PID with creation time (reuse guard) | `process.is_alive`, `model.Process.matches` | `test_process::test_pid_reuse_guarded_by_start_time` | headless-verified |
 | Monotonic sequence within a producer epoch; reject stale | `registry.accept_snapshot` | `test_registry::test_stale_sequence_rejected` | headless-verified |
 | Slot reuse increments a generation; delayed press doesn't hit new occupant | `registry` (generation, `validate_press`) | `test_registry::test_stale_press_does_not_focus_new_occupant`, B-20 | headless-verified |
@@ -103,7 +103,7 @@ as passed from a simulated API test").
 
 ```
 cd opendeck-broker
-python -m pytest tests -q     # 91 pass
+python -m pytest tests -q     # 92 pass
 python tools/acceptance.py    # 24/24 headless; writes acceptance-report.md
 python tools/selftest.py      # simulated end-to-end demo
 python tools/demo_live.py     # render the real frame from the live global DB

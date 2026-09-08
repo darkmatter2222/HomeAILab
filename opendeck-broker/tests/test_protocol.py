@@ -67,6 +67,17 @@ def test_two_launches_same_directory_separate_slots():
     assert len(reg.instances) == 2
 
 
+def test_each_launch_gets_a_fresh_instance_id():
+    # research section 7: "Fresh UUID per launch; immutable identity." Even for
+    # the same directory, each launch is a distinct tracked TUI with its own id.
+    reg, adapter = adapter_with({})
+    i1, _ = adapter.register_launch("/d/a", "a", pid=LIVE)
+    i2, _ = adapter.register_launch("/d/a", "a", pid=LIVE)
+    i3, _ = adapter.register_launch("/d/a", "a", pid=LIVE)
+    assert len({i1, i2, i3}) == 3  # three launches -> three distinct identities
+    assert len(reg.instances) == 3
+
+
 def test_detach_clears_slot():
     reg, adapter = adapter_with({})
     iid, slot = adapter.register_launch("/d/a", "a", pid=LIVE)
