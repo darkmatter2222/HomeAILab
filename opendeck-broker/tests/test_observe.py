@@ -229,6 +229,21 @@ def test_completed_tool_is_not_active(tmp_path):
     assert st.status is Status.IDLE
 
 
+def test_session_with_null_directory_is_keyed_to_empty(tmp_path):
+    # a session whose directory is NULL is keyed to the normalized empty string
+    # (the observer/adapter key directories by _norm_dir, which maps None -> "").
+    db, conn = make_db(tmp_path)
+    conn.execute(
+        "INSERT INTO session(id, directory, title, time_created, time_updated, time_archived)"
+        " VALUES(?,?,?,?,?,?)",
+        ("s-null", None, "title", now_ms(), now_ms(), None),
+    )
+    conn.commit()
+    snap = DbObserver(db).snapshot_by_directory()
+    assert "" in snap  # the null directory is keyed to ""
+    assert snap[""].has_session
+
+
 def test_session_with_no_parts_is_idle(tmp_path):
     # a live session with no parts (just launched, no activity yet) is idle --
     # no recent part update, no active tool, no pending requests.
