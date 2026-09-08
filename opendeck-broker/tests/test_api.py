@@ -170,6 +170,46 @@ def test_deck_sse_initial_snapshot(server):
         conn.close()
 
 
+def test_deck_sse_streams_state_changes(server):
+    # the SSE /v1/deck endpoint must push a new frame when state changes (not
+    # just the initial snapshot) -- the deck UI subscribes to this.
+    import http.client
+
+    api, port, broker = server
+    token = api.token
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    conn.request("GET", "/v1/deck", headers={"X-OpenDeck-Token": token})
+    resp = conn.getresponse()
+    assert resp.status == 200
+
+    def next_snapshot():
+        for _ in range(16):
+            line = resp.fp.readline().decode().strip()
+            if not line:
+                continue
+            if line.startswith("data:"):
+                return json.loads(line[5:].strip())
+        return None
+
+    try:
+        initial = next_snapshot()
+        assert initial is not None and initial["type"] == "snapshot"
+
+        # trigger a state change on a separate connection; the open SSE stream
+        # must receive the pushed frame
+        st, reg = req("POST", f"http://127.0.0.1:{port}/v1/instances/register", token,
+                      {"directory": "/d/homeai", "alias": "homeai", "pid": os.getpid()})
+        assert st == 200
+        iid = reg["instanceId"]
+        req("PUT", f"http://127.0.0.1:{port}/v1/instances/{iid}/snapshot", token,
+            {"status": "busy"})
+
+        pushed = next_snapshot()
+        assert pushed is not None and pushed["type"] == "snapshot"
+    finally:
+        conn.close()
+
+
 def test_wrong_token_rejected(server):
     api, port, broker = server
     st, body = req("GET", f"http://127.0.0.1:{port}/v1/display", "wrong-token")
