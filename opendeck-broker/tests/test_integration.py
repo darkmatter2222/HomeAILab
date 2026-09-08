@@ -118,3 +118,24 @@ def test_run_entry_point_tick_loop_and_lock_cleanup(tmp_path):
     lock = BrokerLock()
     assert lock.acquire() is True
     lock.release()
+
+
+def test_main_cli_wires_mock_port_once(monkeypatch):
+    # the CLI entry point must wire --mock / --port / --once into run().
+    from opendeck_broker import main as m
+
+    calls = []
+
+    def fake_run(config=None, use_mock=False, tick=None, max_ticks=None):
+        calls.append((config.port, use_mock, max_ticks))
+        return 0
+
+    monkeypatch.setattr(m, "run", fake_run)
+    monkeypatch.setenv("OPENDECK_BROKER_PORT", "1234")
+
+    assert m.main(["--mock", "--once"]) == 0
+    assert calls[-1] == (1234, True, 1)  # env port, mock on, single tick
+
+    # --port overrides the env-supplied port; without --once it runs unbounded
+    assert m.main(["--mock", "--port", "9999"]) == 0
+    assert calls[-1] == (9999, True, None)
