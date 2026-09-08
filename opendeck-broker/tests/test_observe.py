@@ -495,6 +495,18 @@ def test_mixed_pending_and_resolved_questions(tmp_path):
     assert len(st.pending_questions) == 1  # only the pending one, not the completed one
 
 
+def test_fresh_session_with_no_parts_is_idle(tmp_path):
+    # a session with no parts (a fresh TUI that has not done anything yet) is
+    # IDLE -- no running tool, no pending request, no recent activity -- so the
+    # launch shows amber, ready for the first prompt.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/fresh")
+    st = DbObserver(db).snapshot_by_directory()["/d/fresh"]
+    assert st.has_session is True
+    assert st.status is Status.IDLE
+    assert st.has_pending_input is False
+
+
 def test_archived_session_is_excluded(tmp_path):
     # a session that has been archived (time_archived set) is no longer a live
     # TUI: the observer's query filters it out, so its directory does not appear
