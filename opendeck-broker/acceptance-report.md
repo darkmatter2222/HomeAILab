@@ -1,6 +1,6 @@
 # opendeck-broker acceptance matrix
 
-Generated: 2026-09-08T02:54:29
+Generated: 2026-09-08T03:00:31
 
 ## Environment (exact versions, research section 14)
 

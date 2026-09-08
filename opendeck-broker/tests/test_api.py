@@ -381,6 +381,22 @@ def test_display_slot_shows_unknown_when_telemetry_untrusted(server):
     assert disp["frame"][slot]["appearance"] == "unknown"
 
 
+def test_snapshot_retry_status_shows_run(server):
+    # a snapshot with a retry status also renders the slot as "run" (the
+    # instance is retrying, which is a busy state -- not idle).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/x", "alias": "x", "pid": 1})
+    iid, slot = reg["instanceId"], reg["slot"]
+    st, snap = req("PUT", f"{base}/v1/instances/{iid}/snapshot", token,
+                   {"status": "retry"})
+    assert st == 200 and snap["applied"] is True
+    st, disp = req("GET", f"{base}/v1/display", token)
+    assert disp["frame"][slot]["appearance"] == "run"
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
