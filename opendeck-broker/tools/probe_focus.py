@@ -35,6 +35,10 @@ def main() -> int:
         print(f"launched a test terminal with marker {marker!r}; waiting 2s for it to appear...")
         time.sleep(2.0)
 
+    if not marker:
+        print("FAIL: pass --marker 'opencode:<alias>-<id>' or --launch to open a test window first.")
+        return 1
+
     ad = WindowsFocusAdapter()
     status, matches = ad.resolve(marker)
     print(f"resolve({marker!r}) -> {status.value}, matches={len(matches)}")
