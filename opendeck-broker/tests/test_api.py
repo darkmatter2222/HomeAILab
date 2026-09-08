@@ -478,6 +478,17 @@ def test_register_with_no_observer_still_registers(server):
     assert reg["slot"] in (0, 1, 2, 3, 4, 5)
 
 
+def test_register_with_special_and_unicode_directory_still_registers(server):
+    # a directory with both special characters and unicode still registers.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/日本語/日本語/日本語", "alias": "mixed", "pid": 1})
+    assert st == 200
+    assert reg["instanceId"]  # registered successfully
+
+
 def test_register_with_space_in_directory_still_registers(server):
     # a directory with a space still registers (the path is stored as-is).
     api, port, broker = server
