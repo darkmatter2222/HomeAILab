@@ -59,6 +59,32 @@ def test_marker_match_is_case_insensitive_substring():
     assert res.hwnd == 7
 
 
+def test_focus_restores_window_before_foreground():
+    # research section 10: "if target is minimized: restore it" then activate.
+    from opendeck_broker.focus.windows import SW_RESTORE, WindowsFocusAdapter
+
+    show_calls = []
+    fg_calls = []
+
+    def enumerate(cb):
+        if not cb(42, "[opencode:x] w"):
+            return
+
+    ad = WindowsFocusAdapter(
+        enumerate_windows=enumerate,
+        show_window=lambda hwnd, cmd=9: (show_calls.append((hwnd, cmd)), True)[1],
+        set_foreground=lambda hwnd: (fg_calls.append(hwnd), True)[1],
+        get_foreground=lambda: 42,
+    )
+    res = ad.focus(42)
+    assert res.status is FocusStatus.SUCCESS
+    # restore (SW_RESTORE=9) is attempted on the target, then foreground
+    assert (42, SW_RESTORE) in show_calls
+    assert fg_calls == [42]
+    # restore happens before the foreground request
+    assert show_calls[0][0] == 42
+
+
 def test_launch_project_uses_given_marker(monkeypatch):
     from opendeck_broker.focus.windows import launch_project
 

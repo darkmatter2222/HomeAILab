@@ -63,7 +63,7 @@ tests/
 ```
 cd opendeck-broker
 pip install -r requirements.txt
-python -m pytest tests -q        # 51 tests, headless (no Mini required)
+python -m pytest tests -q        # headless (no Mini required)
 python tools/selftest.py         # simulated end-to-end demo
 ```
 
