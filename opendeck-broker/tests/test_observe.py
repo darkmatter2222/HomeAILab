@@ -168,6 +168,19 @@ def test_old_part_update_is_idle(tmp_path):
     assert snap["/proj/c"].status is Status.IDLE
 
 
+def test_multi_session_same_dir_latest_recency_drives_busy(tmp_path):
+    # two live sessions in the same directory share one slot: the directory's
+    # busy state is driven by the MOST RECENT part update across both (a fresh
+    # update in either one keeps the slot busy), while pending requests fold.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "old", "/d/shared", upd=now_ms() - 120_000)
+    add_part(conn, "old", {"type": "text"}, upd=now_ms() - 120_000)
+    add_session(conn, "new", "/d/shared")
+    add_part(conn, "new", {"type": "text"}, upd=now_ms() - 3_000)  # recent in one
+    st = DbObserver(db).snapshot_by_directory()["/d/shared"]
+    assert st.status is Status.BUSY  # the recent update drives busy
+
+
 def test_archived_session_excluded(tmp_path):
     db, conn = make_db(tmp_path)
     add_session(conn, "s1", "/proj/d", archived=now_ms())
