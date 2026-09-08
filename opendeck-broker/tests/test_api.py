@@ -86,6 +86,30 @@ def test_api_server_exposes_token_and_port(server):
     assert isinstance(api.token, str) and api.token
 
 
+def test_api_body_malformed_valid_and_empty():
+    # _body parses the JSON request body; a malformed body or an absent body
+    # returns {} so a bad request doesn't crash the handler, and a valid body is
+    # returned as the parsed dict.
+    import io
+
+    from opendeck_broker.api import _Handler
+
+    h = _Handler.__new__(_Handler)
+    h.headers = {"Content-Length": "8"}
+    h.rfile = io.BytesIO(b"not json")
+    assert h._body() == {}
+
+    h2 = _Handler.__new__(_Handler)
+    h2.headers = {"Content-Length": "9"}
+    h2.rfile = io.BytesIO(b'{"a": 1}')
+    assert h2._body() == {"a": 1}
+
+    h3 = _Handler.__new__(_Handler)
+    h3.headers = {}
+    h3.rfile = io.BytesIO(b"")
+    assert h3._body() == {}
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
