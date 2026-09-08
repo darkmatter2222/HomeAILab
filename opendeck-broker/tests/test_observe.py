@@ -630,6 +630,22 @@ def test_archived_session_is_excluded(tmp_path):
     assert "/d/arch" not in snap
 
 
+def test_archived_session_pending_request_does_not_fold(tmp_path):
+    # a live session and an archived session share one directory, and only the
+    # ARCHIVED one has a pending question: the observer filters archived sessions
+    # out of the query, so the stale TUI's pending request does NOT fold into the
+    # live slot. The slot stays idle with has_pending_input False.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "live", "/d/shared")
+    add_session(conn, "arch", "/d/shared", archived=now_ms())
+    # only the archived session has a pending question
+    add_part(conn, "arch", {"type": "tool", "tool": "question", "state": {"status": "pending"}})
+    st = DbObserver(db).snapshot_by_directory()["/d/shared"]
+    assert st.has_session
+    assert st.has_pending_input is False
+    assert st.pending_questions == []
+
+
 def test_default_db_path_honors_env_and_falls_back(monkeypatch):
     # default_db_path() honors the OPENCODE_DB env var (a non-default store) and
     # falls back to the global OpenCode DB location when unset -- the broker's
