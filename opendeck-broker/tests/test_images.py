@@ -1,4 +1,4 @@
-from opendeck_broker.images import black_frame, render_key
+from opendeck_broker.images import _short, black_frame, render_key
 from opendeck_broker.model import APPEARANCE_COLOR, DisplayAppearance
 
 
@@ -6,6 +6,17 @@ def test_black_key_is_all_zero():
     img = black_frame(16)
     assert len(img) == 16 * 16 * 3
     assert all(b == 0 for b in img)
+
+
+def test_long_identity_is_truncated_to_fit():
+    # research section 9: "A short identity label" -- a long alias must not
+    # overflow the key; it is truncated to a short second line.
+    assert _short("homeai") == "homeai"
+    assert _short("a" * 50).endswith(".")
+    assert len(_short("a" * 50)) == 12
+    # and rendering a very long identity still yields a valid-sized image
+    img = render_key(DisplayAppearance.RUN, "x" * 80)
+    assert len(img) == 144 * 144 * 3
 
 
 def test_black_render_matches_black_frame():
