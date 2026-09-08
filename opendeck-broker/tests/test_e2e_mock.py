@@ -279,6 +279,29 @@ def test_press_on_black_key_does_nothing():
     assert broker.registry.frame()[5].appearance is DisplayAppearance.BLACK
 
 
+def test_press_with_no_focus_adapter_is_no_focus_target():
+    # a press on an occupied slot with no focus adapter configured must report
+    # no_focus_target (not crash, not claim success, not mutate state).
+    from opendeck_broker.model import Instance, Process, Status
+
+    reg = Registry()
+    device = MockDevice()
+    broker = Broker(registry=reg, device=device, focus=None)
+    broker.start()
+    inst = Instance(
+        instance_id="a", process=Process(pid=LIVE), ui_attachment_id="a",
+        directory="/a", status=Status.IDLE,
+        focus_target={"kind": "windows-terminal-window", "opaqueId": "opencode:a"},
+    )
+    reg.register(inst)
+    slot = reg.resolve("a").slot
+    device.inject_press(slot)
+    results = broker.process_presses()
+    assert results[0]["result"] == "no_focus_target"
+    # the occupant is unchanged (a press only focuses, never mutates state)
+    assert reg.frame()[slot].instance_id == "a"
+
+
 def test_running_turns_green_and_completes_to_idle():
     broker, adapter, device, obs = build(windows=[(1, "[opencode:a] x")], foreground_after=1)
     broker.start()
