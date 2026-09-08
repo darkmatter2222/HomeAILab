@@ -829,6 +829,43 @@ def test_running_tool_with_full_matrix_plus_resolved_excluded(tmp_path):
     assert len(st.pending_permissions) == 2  # pending + running; rejected excluded
 
 
+def test_running_tool_with_exhaustive_status_partition(tmp_path):
+    # a session with a running tool AND a pending question AND a pending
+    # permission AND EVERY resolved status of both kinds (completed question,
+    # replied question, error question, replied permission, rejected permission,
+    # error permission): the running tool drives BUSY, the two pending requests
+    # are counted (1 pending question, 1 pending permission), and ALL SIX
+    # resolved requests are excluded. This exhausts the full status partition --
+    # pending/running (non-resolved) vs completed/replied/rejected/error
+    # (resolved) -- across both request kinds in one snapshot.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/exhaustive")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-q-pending", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-p-pending", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "pending"}})))
+    # every resolved status of both kinds
+    for qid, qstatus in (("p-q-completed", "completed"), ("p-q-replied", "replied"), ("p-q-error", "error")):
+        conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                     (qid, "s1", now_ms(),
+                      json.dumps({"type": "tool", "tool": "question", "state": {"status": qstatus}})))
+    for pid, pstatus in (("p-p-replied", "replied"), ("p-p-rejected", "rejected"), ("p-p-error", "error")):
+        conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                     (pid, "s1", now_ms(),
+                      json.dumps({"type": "tool", "tool": "permission", "state": {"status": pstatus}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/exhaustive"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_questions) == 1  # only the pending one; 3 resolved excluded
+    assert len(st.pending_permissions) == 1  # only the pending one; 3 resolved excluded
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
