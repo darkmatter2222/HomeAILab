@@ -11,6 +11,18 @@ def now_ms():
     return int(time.time() * 1000)
 
 
+def test_norm_dir_normalizes_paths():
+    # the observer/adapter key directories by a normalized path: None -> "",
+    # backslashes -> forward slashes, trailing slash stripped.
+    from opendeck_broker.opencode.observe import _norm_dir
+
+    assert _norm_dir(None) == ""
+    assert _norm_dir("") == ""
+    assert _norm_dir("C:\\Users\\ryans\\proj") == "C:/Users/ryans/proj"
+    assert _norm_dir("/d/a/") == "/d/a"
+    assert _norm_dir("/d/a") == "/d/a"
+
+
 def test_default_db_path_env_override_and_default(monkeypatch):
     # the observer must read the OpenCode global DB; OPENCODE_DB overrides the
     # default location, which is the standard OpenCode global path.
