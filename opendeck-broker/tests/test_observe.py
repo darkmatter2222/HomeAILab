@@ -120,6 +120,17 @@ def test_multiple_pending_questions_are_all_counted(tmp_path):
     assert len(st.pending_questions) == 3
 
 
+def test_rejected_question_is_not_pending(tmp_path):
+    # a question part whose status is "rejected" (a resolved status) is not
+    # counted as pending -- completing the resolved-question status coverage.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/rejectedq")
+    add_part(conn, "s1", {"type": "tool", "tool": "question", "state": {"status": "rejected"}})
+    st = DbObserver(db).snapshot_by_directory()["/d/rejectedq"]
+    assert st.pending_questions == []
+    assert not st.has_pending_input
+
+
 def test_completed_question_is_not_input(tmp_path):
     db, conn = make_db(tmp_path)
     add_session(conn, "s1", "/proj/a")
