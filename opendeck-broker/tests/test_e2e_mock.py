@@ -112,6 +112,23 @@ def test_broker_sweep_with_lease_frees_quiet_producer():
     assert reg.frame()[0].appearance is DisplayAppearance.BLACK
 
 
+def test_render_skips_identical_reuploads():
+    # the broker's per-key render cache (research section 11: avoid unnecessary
+    # USB traffic) means a render() that produces the same frame twice uploads
+    # each key only once -- the second render is a no-op (set_calls unchanged).
+    broker, adapter, device, obs = build(
+        {"/d/a": SessionState(directory="/d/a", has_session=True)}
+    )
+    device.connect()
+    adapter.register_launch("/d/a", "a", pid=LIVE)
+    adapter.refresh()
+    broker.render()
+    calls_after_first = device.set_calls
+    assert calls_after_first > 0  # the first render uploaded the frame
+    broker.render()  # identical frame again
+    assert device.set_calls == calls_after_first  # no re-upload (cached)
+
+
 def test_broker_diagnostics_reports_full_state():
     # broker.diagnostics aggregates the registry state, the focus log tail, the
     # pending-press count, and the device connection state (surfaced by the
