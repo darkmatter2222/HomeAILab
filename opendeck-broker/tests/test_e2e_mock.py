@@ -325,6 +325,17 @@ def test_hid_mini_availability_flags_reflect_imports():
     assert ElgatoMiniHID.library_available() is lib_ok
 
 
+def test_set_key_image_false_without_deck_or_hid():
+    # with neither the elgato-streamdeck deck nor a raw hid handle, set_key_image
+    # returns False so the broker does not claim a render that did not happen.
+    from opendeck_broker.device.hid_mini import ElgatoMiniHID
+
+    deck = ElgatoMiniHID()
+    deck._deck = None
+    deck._hid = None
+    assert deck.set_key_image(0, b"\x00" * 16) is False
+
+
 def test_on_key_down_forwards_press_edge():
     # the elgato-streamdeck callback path: key-down delivers a 0-based index and
     # is forwarded as a single press edge (the broker de-dupes).
