@@ -115,6 +115,25 @@ def test_child_session_pending_request_folds_into_parent_slot(tmp_path):
     assert len(snap["/proj/shared"].pending_questions) == 1
 
 
+def test_two_sessions_fold_question_and_permission_into_one_slot(tmp_path):
+    # two live sessions in one directory, each with a *different* pending request
+    # kind (one a question, one a permission): both fold into the single slot for
+    # that directory -- the slot reports has_pending_input True with one question
+    # AND one permission, not two slots. The per-kind pending tallies are folded
+    # across sessions independently of each other.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s-q", "/proj/two")
+    add_session(conn, "s-p", "/proj/two")
+    add_part(conn, "s-q", {"type": "tool", "tool": "question", "state": {"status": "pending"}})
+    add_part(conn, "s-p", {"type": "tool", "tool": "permission", "state": {"status": "pending"}})
+    snap = DbObserver(db).snapshot_by_directory()
+    assert list(snap) == ["/proj/two"]  # one slot, not two
+    st = snap["/proj/two"]
+    assert st.has_pending_input
+    assert len(st.pending_questions) == 1
+    assert len(st.pending_permissions) == 1
+
+
 def test_multiple_pending_questions_are_all_counted(tmp_path):
     # a session with several unresolved question parts reports each one
     # (pending_questions grows with the count, not capped at one).
