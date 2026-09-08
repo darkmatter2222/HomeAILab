@@ -110,6 +110,19 @@ def test_api_body_malformed_valid_and_empty():
     assert h3._body() == {}
 
 
+def test_register_with_empty_body_uses_defaults(server):
+    # the register endpoint tolerates an empty body (a producer that sends no
+    # directory/alias/pid): it still creates an instance with the defaults and
+    # returns a fresh instanceId + a valid slot, not a crash.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token, {})
+    assert st == 200
+    assert reg["instanceId"]  # a fresh identity was minted
+    assert reg["slot"] in (0, 1, 2, 3, 4, 5)
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
