@@ -52,6 +52,24 @@ def test_focus_denied_when_foreground_not_our_window():
     assert res.observed_foreground == 99
 
 
+def test_focus_exception_is_denied_with_detail():
+    # if show_window or set_foreground raises (a transient Win32 error), the
+    # focus is reported as denied with the error detail -- not a crash, and not
+    # a false success.
+    def raising_show(hwnd, cmd=9):
+        raise RuntimeError("boom")
+
+    ad = WindowsFocusAdapter(
+        enumerate_windows=lambda cb: (cb(5, "[opencode:x] w") or True),
+        show_window=raising_show,
+        set_foreground=lambda hwnd: True,
+        get_foreground=lambda: 5,
+    )
+    res = ad.focus(5)
+    assert res.status is FocusStatus.FOCUS_DENIED_OR_WRONG_TARGET
+    assert "boom" in res.detail
+
+
 def test_marker_match_is_case_insensitive_substring():
     ad = make_adapter([(7, "HomeAILab - [opencode:HomeAI] opencode")], foreground_after=7)
     res = ad.focus_marker("opencode:homeai")
