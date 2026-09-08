@@ -89,7 +89,9 @@ class DbObserver:
         if not self.db_path.exists():
             return {}
         now = self._now_ms()
-        conn = sqlite3.connect(str(self.db_path))
+        # Read-only URI so the observer never grabs a write lock on OpenCode's
+        # live store (WAL lets a reader coexist with OpenCode's writer).
+        conn = sqlite3.connect(self.db_path.as_uri() + "?mode=ro", uri=True, timeout=2.0)
         try:
             rows = conn.execute(QUERY).fetchall()
         finally:

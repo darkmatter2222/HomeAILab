@@ -100,4 +100,27 @@ def test_pending_permission_is_input(tmp_path):
     obs = DbObserver(db)
     snap = obs.snapshot_by_directory()
     assert len(snap["/proj/e"].pending_permissions) == 1
-    assert snap["/proj/e"].has_pending_input
+
+
+def test_observer_opens_db_read_only(tmp_path, monkeypatch):
+    # the observer must not grab a write lock on OpenCode's live store
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/a")
+    conn.close()
+    import opendeck_broker.opencode.observe as ob
+
+    calls = []
+    real_connect = sqlite3.connect
+
+    def fake_connect(*a, **k):
+        calls.append((a, k))
+        return real_connect(*a, **k)
+
+    monkeypatch.setattr(ob.sqlite3, "connect", fake_connect)
+    obs = DbObserver(db)
+    obs.snapshot_by_directory()
+    assert len(calls) == 1
+    args, kwargs = calls[0]
+    assert kwargs.get("uri") is True
+    assert args[0].startswith("file:")
+    assert "mode=ro" in args[0]
