@@ -131,6 +131,21 @@ def test_process_exit_clears_slot_to_black():
     assert r.frame()[0].instance_id is None
 
 
+def test_frame_dead_occupant_renders_black():
+    # a slot whose occupant is still in the registry but dead (live=False, not
+    # yet freed) renders BLACK -- the frame checks `live` before rendering the
+    # occupant's appearance, so a dying TUI reads black immediately.
+    from opendeck_broker.model import DisplayAppearance
+
+    r = Registry()
+    busy = inst("a", status=Status.BUSY)
+    slot = r.register(busy)
+    assert r.frame()[slot].appearance is DisplayAppearance.RUN  # live -> RUN
+    busy.live = False  # the process died but the slot is not yet freed
+    assert r.frame()[slot].appearance is DisplayAppearance.BLACK
+    assert r.frame()[slot].instance_id is None  # reported as unoccupied
+
+
 def test_broker_epoch_changes_between_registries():
     a, b = Registry(), Registry()
     assert a.broker_epoch != b.broker_epoch
