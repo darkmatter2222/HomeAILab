@@ -239,6 +239,31 @@ def test_raw_hid_poll_ignores_out_of_range_reports():
     assert seen == [0, 5]
 
 
+def test_hid_mini_availability_flags_reflect_imports():
+    # the two classmethod probes must correctly reflect whether each optional
+    # binding is importable (connect() prefers the library, falls back to hid).
+    import importlib.util
+
+    from opendeck_broker.device.hid_mini import ElgatoMiniHID
+
+    hid_ok = importlib.util.find_spec("hid") is not None
+    lib_ok = importlib.util.find_spec("elgato_streamdeck") is not None
+    assert ElgatoMiniHID.hid_available() is hid_ok
+    assert ElgatoMiniHID.library_available() is lib_ok
+
+
+def test_on_key_down_forwards_press_edge():
+    # the elgato-streamdeck callback path: key-down delivers a 0-based index and
+    # is forwarded as a single press edge (the broker de-dupes).
+    from opendeck_broker.device.hid_mini import ElgatoMiniHID
+
+    deck = ElgatoMiniHID()
+    seen = []
+    deck.set_key_press_handler(seen.append)
+    deck._on_key_down(4)
+    assert seen == [4]
+
+
 def test_concurrent_renders_are_serialized():
     # research section 11: serialize image uploads (main loop + REST API can
     # both render). Concurrent renders must not race the cache or leave a torn
