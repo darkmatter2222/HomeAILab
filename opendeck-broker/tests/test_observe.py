@@ -714,6 +714,33 @@ def test_running_tool_with_two_pending_each_kind_counts_all(tmp_path):
     assert len(st.pending_permissions) == 2
 
 
+def test_running_tool_with_pending_question_and_running_permission(tmp_path):
+    # a session with a running tool AND a pending question AND a running
+    # permission (the permission is mid-flight, not yet replied): the running
+    # tool drives BUSY, and BOTH requests are unresolved -- the pending question
+    # (status pending) and the running permission (status running, not in the
+    # resolved set) -- so has_pending_input True with 1 pending question and 1
+    # pending permission. Exercises a non-"pending" status (running) on the
+    # permission side alongside a "pending" status on the question side.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/mixedstatus")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-q", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-p", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "running"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/mixedstatus"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_questions) == 1
+    assert len(st.pending_permissions) == 1
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
