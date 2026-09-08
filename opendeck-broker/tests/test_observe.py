@@ -1,13 +1,25 @@
 import json
 import sqlite3
 import time
+from pathlib import Path
 
 from opendeck_broker.model import Status
-from opendeck_broker.opencode.observe import DbObserver
+from opendeck_broker.opencode.observe import DbObserver, default_db_path
 
 
 def now_ms():
     return int(time.time() * 1000)
+
+
+def test_default_db_path_env_override_and_default(monkeypatch):
+    # the observer must read the OpenCode global DB; OPENCODE_DB overrides the
+    # default location, which is the standard OpenCode global path.
+    monkeypatch.setenv("OPENCODE_DB", "/custom/path/oc.db")
+    assert default_db_path() == Path("/custom/path/oc.db")
+    monkeypatch.delenv("OPENCODE_DB", raising=False)
+    p = default_db_path()
+    assert p.name == "opencode.db"
+    assert "opencode" in p.parts  # .../opencode/opencode.db
 
 
 def make_db(tmp_path):
