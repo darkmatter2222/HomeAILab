@@ -174,13 +174,17 @@ class Registry:
         return expired
 
     # ---------------- detach / death ----------------
-    def _free_slot(self, instance_id: str) -> None:
+    def _free_slot(self, instance_id: str) -> bool:
+        # returns True if the instance was known (and is now removed), so
+        # detach/process_exit can report 200 vs 404 on the REST surface.
+        existed = instance_id in self._instances
         slot = self._instance_slot.pop(instance_id, None)
         if slot is not None and self._slot_occupant[slot] == instance_id:
             self._slot_occupant[slot] = None
         self._instances.pop(instance_id, None)
         self._producer.pop(instance_id, None)
         self._last_seen.pop(instance_id, None)
+        return existed
 
     def detach(self, instance_id: str) -> bool:
         """Best-effort explicit detach."""

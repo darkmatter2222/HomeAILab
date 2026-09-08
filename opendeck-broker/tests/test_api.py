@@ -119,6 +119,32 @@ def test_focus_unknown_instance_is_stale(server):
     assert foc["status"] == "stale"
 
 
+def test_heartbeat_and_delete_via_api(server):
+    # research section 7: the REST heartbeat and delete endpoints (previously
+    # only exercised at the registry level, not the HTTP surface).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/homeai", "alias": "homeai", "pid": os.getpid()})
+    assert st == 200
+    iid, slot = reg["instanceId"], reg["slot"]
+
+    # heartbeat renews presence and returns the broker epoch
+    st, hb = req("POST", f"{base}/v1/instances/{iid}/heartbeat", token)
+    assert st == 200 and hb["broker_epoch"]
+
+    # delete detaches the instance and frees its slot
+    st, dele = req("DELETE", f"{base}/v1/instances/{iid}", token)
+    assert st == 200 and dele["detached"] is True
+    st, disp = req("GET", f"{base}/v1/display", token)
+    assert disp["frame"][slot]["appearance"] in ("black", "idle")
+    # a second delete of the same id is a 404 (already gone)
+    st, dele2 = req("DELETE", f"{base}/v1/instances/{iid}", token)
+    assert st == 404
+
+
 def test_deck_sse_initial_snapshot(server):
     import http.client
 
