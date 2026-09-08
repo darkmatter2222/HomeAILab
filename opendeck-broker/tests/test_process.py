@@ -37,6 +37,20 @@ def test_is_alive_unknown_pid_is_alive():
     assert is_alive(-1) is True
 
 
+def test_start_time_ms_live_and_invalid():
+    # _start_time_ms returns the creation time (epoch ms) for a live pid and
+    # None when the pid cannot be resolved (the PID-reuse guard pairs pid with a
+    # verified creation time; a None just means "fall back to pid equality").
+    from opendeck_broker.process import _start_time_ms
+
+    live = _start_time_ms(os.getpid())
+    assert live is not None
+    assert live > 0  # a plausible epoch-ms value
+
+    # an unresolvable pid (negative) returns None, not a crash
+    assert _start_time_ms(-1) is None
+
+
 def test_is_alive_windows_fallback_without_psutil(monkeypatch):
     # when psutil is unavailable, the Windows ctypes fallback must still report
     # a live process as alive, a dead pid as dead, and an unknown pid as safe.
