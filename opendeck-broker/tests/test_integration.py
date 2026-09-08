@@ -120,6 +120,24 @@ def test_run_entry_point_tick_loop_and_lock_cleanup(tmp_path):
     lock.release()
 
 
+def test_run_returns_zero_when_lock_already_held(tmp_path):
+    # run() when the single-writer lock is already held by another broker exits
+    # cleanly (rc 0, "another opendeck-broker is already running") rather than
+    # fighting for the Mini -- the "one device owner" rule (research section 4).
+    from opendeck_broker.lock import BrokerLock
+    from opendeck_broker.main import run
+
+    db = make_db(tmp_path)
+    cfg = Config(db_path=db, port=0)
+    held = BrokerLock()
+    assert held.acquire() is True
+    try:
+        rc = run(config=cfg, use_mock=True, max_ticks=1)
+    finally:
+        held.release()
+    assert rc == 0
+
+
 def test_build_stack_selects_real_or_mock_device(tmp_path):
     # build_stack's device branch: use_mock=True -> MockDevice (headless),
     # use_mock=False -> the real ElgatoMiniHID (whose constructor does not open
