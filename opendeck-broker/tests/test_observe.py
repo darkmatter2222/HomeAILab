@@ -310,6 +310,25 @@ def test_session_with_null_directory_is_keyed_to_empty(tmp_path):
     assert snap[""].has_session
 
 
+def test_observer_normalizes_windows_drive_path_end_to_end(tmp_path):
+    # a session whose directory is a Windows drive path with backslashes
+    # (C:\\Users\\ryans\\proj\\) is keyed to the normalized forward-slash form
+    # (C:/Users/ryans/proj) end-to-end through the DB -- the observer applies
+    # _norm_dir to the raw directory value before keying. This is the real-world
+    # case on the target host: OpenCode stores the launch directory with Windows
+    # separators, and the deck must key slots by the canonical form.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "C:\\Users\\ryans\\proj\\")
+    add_part(conn, "s1", {"type": "tool", "tool": "bash", "state": {"status": "running"}})
+    snap = DbObserver(db).snapshot_by_directory()
+    # the raw backslash path is NOT the key; the normalized forward-slash path is.
+    assert "C:\\Users\\ryans\\proj\\" not in snap
+    assert "C:/Users/ryans/proj" in snap
+    st = snap["C:/Users/ryans/proj"]
+    assert st.has_session
+    assert st.status is Status.BUSY
+
+
 def test_session_with_no_parts_is_idle(tmp_path):
     # a live session with no parts (just launched, no activity yet) is idle --
     # no recent part update, no active tool, no pending requests.
