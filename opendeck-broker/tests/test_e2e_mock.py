@@ -149,6 +149,21 @@ def test_stop_blacks_out_colored_keys():
     assert not broker._started
 
 
+def test_broker_works_headless_without_device():
+    # a Broker with no device (device=None) still runs the loop headless: start
+    # returns True, render/upload_black_frame/sweep are safe no-ops, and
+    # diagnostics reports the device as not connected (no crash on any path).
+    from opendeck_broker.broker import Broker
+
+    b = Broker(registry=Registry(), device=None, focus=None, lease_seconds=10.0)
+    assert b.start() is True
+    b.upload_black_frame()  # no device -> no-op
+    b.render()              # no device -> no-op
+    b.sweep()               # lease set, no quiet instances -> []
+    assert b.diagnostics()["device_connected"] is False
+    b.stop()                # no device -> still safe
+
+
 def test_register_render_press_focus_cycle():
     broker, adapter, device, obs = build(
         states={"/d/homeai": SessionState(directory="/d/homeai", has_session=True)}
