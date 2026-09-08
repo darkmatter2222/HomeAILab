@@ -267,6 +267,24 @@ def test_session_title_and_id_are_captured(tmp_path):
     assert st.has_session is True
 
 
+def test_part_with_invalid_json_degrades_the_reader(tmp_path):
+    # a part whose data is not valid JSON makes json_extract raise (malformed
+    # JSON), so the whole read degrades (the adapter catches it -> UNKNOWN)
+    # rather than silently returning a partial, wrong count.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/badjson")
+    old = now_ms() - 120_000
+    conn.execute(
+        "INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+        ("p-bad", "s1", old, "not json at all"),
+    )
+    conn.commit()
+    import pytest as _pt
+
+    with _pt.raises(Exception):
+        DbObserver(db).snapshot_by_directory()
+
+
 def test_missing_db_returns_empty(tmp_path):
     obs = DbObserver(tmp_path / "nope.db")
     assert obs.snapshot_by_directory() == {}
