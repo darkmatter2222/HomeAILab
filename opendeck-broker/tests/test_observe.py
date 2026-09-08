@@ -239,6 +239,27 @@ def test_pending_permission_is_input(tmp_path):
     assert len(snap["/proj/e"].pending_permissions) == 1
 
 
+def test_both_pending_permission_and_question_are_input(tmp_path):
+    # a session with BOTH a pending permission and a pending question at the same
+    # time is still INPUT; both request kinds are captured (not one shadowing the
+    # other).
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/proj/both")
+    # explicit distinct part ids (the add_part helper derives its id from
+    # len(data), which collides for two same-shape dicts)
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("part-perm", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "asked"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("part-quest", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/proj/both"]
+    assert st.has_pending_input
+    assert len(st.pending_permissions) == 1
+    assert len(st.pending_questions) == 1
+
+
 def test_observer_opens_db_read_only(tmp_path, monkeypatch):
     # the observer must not grab a write lock on OpenCode's live store
     db, conn = make_db(tmp_path)
