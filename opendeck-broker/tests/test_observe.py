@@ -76,6 +76,22 @@ def test_pending_question_is_input(tmp_path):
     assert len(snap["/proj/a"].pending_questions) == 1
 
 
+def test_child_session_pending_request_folds_into_parent_slot(tmp_path):
+    # research: one TUI can own a subagent/child session in the same directory.
+    # A child with a pending request must show INPUT on the parent's single
+    # slot, not take a second slot.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "parent", "/proj/shared")
+    add_session(conn, "child", "/proj/shared")
+    # only the child has a pending question
+    add_part(conn, "child", {"type": "tool", "tool": "question", "state": {"status": "pending"}})
+    obs = DbObserver(db)
+    snap = obs.snapshot_by_directory()
+    assert list(snap) == ["/proj/shared"]  # one slot, not two
+    assert snap["/proj/shared"].has_pending_input
+    assert len(snap["/proj/shared"].pending_questions) == 1
+
+
 def test_completed_question_is_not_input(tmp_path):
     db, conn = make_db(tmp_path)
     add_session(conn, "s1", "/proj/a")
