@@ -121,9 +121,12 @@ The broker observes state from the **shared global `opencode.db`** (TUI and
 `opencode serve` both write it), so it needs **no plugin installed into the
 OpenCode runtime** and covers every session type. This is the research's
 "known reachable" integration, verified against the live DB on this machine and
-against SQLite fixtures in `tests/test_observe.py`. A TUI plugin (research
-section 5) is the preferred alternative if the installed runtime is verified to
-support it; the broker/registry/focus/device layers are unchanged either way.
+against SQLite fixtures in `tests/test_observe.py`. It also sidesteps research
+section 5's server-API caveats: no assumption about a fixed port (4096) or an
+externally reachable server URL, since the store is a local file every OpenCode
+process already writes. A TUI plugin (research section 5) is the preferred
+alternative if the installed runtime is verified to support it; the
+broker/registry/focus/device layers are unchanged either way.
 
 **Process-exit observation** (research sections 6, 7): on each tick the adapter
 checks each launch's process (PID + verified creation time, via `psutil` with a
