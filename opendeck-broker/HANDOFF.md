@@ -42,6 +42,7 @@ as passed from a simulated API test").
 | Heartbeat renews presence, returns broker epoch | `registry.heartbeat`, `api /heartbeat` | `test_registry::test_heartbeat_returns_broker_epoch` | headless-verified |
 | Endpoints (register/snapshot/heartbeat/delete/display/deck/focus/diagnostics) | `api.py` | `test_api` (REST + SSE) | headless-verified |
 | Press accepts a known instance id, not an arbitrary command | `broker._handle_press` (resolves occupant -> fixed marker) | `test_e2e_mock` | headless-verified |
+| Switching conversation inside a TUI keeps the same slot + binding (research 14) | `adapter.refresh` (per-directory tracked TUI) | B-17 (models a real session-id change) | headless-verified |
 
 ## State reducer (research section 6)
 

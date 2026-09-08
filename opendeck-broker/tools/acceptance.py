@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from opendeck_broker.broker import Broker  # noqa: E402
 from opendeck_broker.device.mock import MockDevice  # noqa: E402
 from opendeck_broker.focus.windows import FocusStatus, WindowsFocusAdapter  # noqa: E402
-from opendeck_broker.model import DisplayAppearance  # noqa: E402
+from opendeck_broker.model import DisplayAppearance, Status  # noqa: E402
 from opendeck_broker.opencode.adapter import OpenCodeAdapter  # noqa: E402
 from opendeck_broker.opencode.observe import SessionState  # noqa: E402
 from opendeck_broker.registry import Registry  # noqa: E402
@@ -270,15 +270,23 @@ def r_single_press_single_focus(h: Harness) -> None:
 
 def r_switch_conversation_same_slot(h: Harness) -> None:
     iid, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
+    h.obs.states["/d/a"] = SessionState(
+        directory="/d/a", has_session=True, status=Status.BUSY, session_id="s1"
+    )
     h.adapter.refresh(); h.broker.render()
     first = h.broker.registry.frame()[s]
-    # the selected session changes; the instance (and its slot) does not
-    inst = h.broker.registry.instances[iid]
-    inst.identity_label = "a"
+    assert first.appearance is DisplayAppearance.RUN
+    # the TUI switches to a different conversation: a new session id, same dir
+    h.obs.states["/d/a"] = SessionState(
+        directory="/d/a", has_session=True, status=Status.IDLE, session_id="s2"
+    )
     h.adapter.refresh(); h.broker.render()
     second = h.broker.registry.frame()[s]
+    # same tracked TUI -> same instance binding and slot, no new key
     assert first.instance_id == second.instance_id == iid
     assert first.slot == second.slot == s
+    # and the display reflects the new conversation's status
+    assert second.appearance is DisplayAppearance.IDLE
 
 
 def r_close_shell_stays_open_slot_clears(h: Harness) -> None:
