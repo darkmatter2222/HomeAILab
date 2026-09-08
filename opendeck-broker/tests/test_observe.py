@@ -76,6 +76,18 @@ def add_part(conn, sid, data, upd=None):
     conn.commit()
 
 
+def test_running_question_is_pending(tmp_path):
+    # a question part whose status is "running" (not in the resolved set
+    # completed/error/replied/rejected) is still an unresolved structured request
+    # -> counted as pending (INPUT).
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/runq")
+    add_part(conn, "s1", {"type": "tool", "tool": "question", "state": {"status": "running"}})
+    st = DbObserver(db).snapshot_by_directory()["/d/runq"]
+    assert st.has_pending_input
+    assert len(st.pending_questions) == 1
+
+
 def test_pending_question_is_input(tmp_path):
     db, conn = make_db(tmp_path)
     add_session(conn, "s1", "/proj/a")
