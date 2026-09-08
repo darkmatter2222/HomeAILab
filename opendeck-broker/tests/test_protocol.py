@@ -97,6 +97,18 @@ def test_home_screen_no_session_is_idle_amber():
     assert reg.frame()[0].appearance is DisplayAppearance.IDLE
 
 
+def test_refresh_with_busy_session_and_pending_question_is_input():
+    # a launch whose directory has a BUSY session with an outstanding question
+    # shows INPUT, not RUN -- the reducer's INPUT-over-RUN precedence holds for
+    # the question case (parallel to the pending-permission case).
+    reg, adapter = adapter_with(
+        {"/d/a": SessionState(directory="/d/a", has_session=True, status=Status.BUSY, pending_questions=["q-1"])}
+    )
+    adapter.register_launch("/d/a", "a", pid=LIVE)
+    adapter.refresh()
+    assert reg.frame()[0].appearance is DisplayAppearance.INPUT
+
+
 def test_refresh_with_existing_idle_session_is_idle_amber():
     # a launch whose directory has an existing IDLE session (has_session=True, no
     # pending, no recent activity) shows IDLE (amber) -- the "ready for another
