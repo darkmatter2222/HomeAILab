@@ -495,6 +495,19 @@ def test_mixed_pending_and_resolved_questions(tmp_path):
     assert len(st.pending_questions) == 1  # only the pending one, not the completed one
 
 
+def test_default_db_path_honors_env_and_falls_back(monkeypatch):
+    # default_db_path() honors the OPENCODE_DB env var (a non-default store) and
+    # falls back to the global OpenCode DB location when unset -- the broker's
+    # config.db() relies on this same fallback.
+    from opendeck_broker.opencode.observe import default_db_path
+
+    monkeypatch.setenv("OPENCODE_DB", "C:/custom/store.db")
+    assert default_db_path() == Path("C:/custom/store.db")
+    monkeypatch.delenv("OPENCODE_DB", raising=False)
+    p = default_db_path()
+    assert p.name == "opencode.db"  # the global OpenCode DB location
+
+
 def test_observer_opens_db_read_only(tmp_path, monkeypatch):
     # the observer must not grab a write lock on OpenCode's live store
     db, conn = make_db(tmp_path)
