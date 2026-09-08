@@ -495,6 +495,17 @@ def test_mixed_pending_and_resolved_questions(tmp_path):
     assert len(st.pending_questions) == 1  # only the pending one, not the completed one
 
 
+def test_pending_tool_is_busy(tmp_path):
+    # a tool in "pending" status (queued, not yet running) still counts as an
+    # active tool: the observer's active-tool tally includes pending tools, so a
+    # queued tool keeps the TUI busy (green), not idle.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/pt")
+    add_part(conn, "s1", {"type": "tool", "tool": "bash", "state": {"status": "pending"}})
+    st = DbObserver(db).snapshot_by_directory()["/d/pt"]
+    assert st.status is Status.BUSY
+
+
 def test_missing_db_returns_empty_snapshot(tmp_path):
     # a DbObserver pointing at a nonexistent DB file (OpenCode has not written its
     # store yet) returns an empty snapshot -- no crash, no phantom session -- so
