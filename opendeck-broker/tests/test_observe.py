@@ -306,6 +306,22 @@ def test_replied_permission_is_not_pending(tmp_path):
     assert not st.has_pending_input
 
 
+def test_rejected_permission_is_not_pending(tmp_path):
+    # a permission part whose status is "rejected" (a resolved status) is not
+    # counted as pending -- parallel to the "replied"/"completed"/"error" cases.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/rejected")
+    conn.execute(
+        "INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+        ("p-rej", "s1", now_ms(),
+         json.dumps({"type": "tool", "tool": "permission", "state": {"status": "rejected"}})),
+    )
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/rejected"]
+    assert st.pending_permissions == []
+    assert not st.has_pending_input
+
+
 def test_pending_permission_is_input(tmp_path):
     db, conn = make_db(tmp_path)
     add_session(conn, "s1", "/proj/e")
