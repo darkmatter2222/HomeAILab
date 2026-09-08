@@ -317,9 +317,18 @@ def r_close_shell_stays_open_slot_clears(h: Harness) -> None:
 
 
 def r_kill_terminal_slot_clears(h: Harness) -> None:
-    iid, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
-    h.adapter.refresh(); h.broker.render()
-    h.adapter.mark_dead(iid)
+    # "Kill OpenCode or its terminal | Slot clears through process/liveness
+    # recovery": register with a pid that has already exited, then refresh -- the
+    # adapter's liveness observation (is_alive) detects the dead process and
+    # clears the slot, with no explicit mark_dead.
+    import subprocess
+    import sys
+
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()  # the TUI process has exited
+    _, s = h.adapter.register_launch("/d/a", "a", pid=p.pid)
+    h.broker.render()
+    h.adapter.refresh()  # liveness observation clears the slot
     h.broker.render()
     assert h.ap(s) is DisplayAppearance.BLACK
 
