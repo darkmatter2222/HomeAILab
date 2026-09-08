@@ -50,6 +50,20 @@ def req(method, url, token, body=None):
         return e.code, json.loads(e.read().decode() or "{}")
 
 
+def mk_focus(windows, fg):
+    def enumerate(cb):
+        for hwnd, title in windows:
+            if not cb(hwnd, title):
+                break
+
+    return WindowsFocusAdapter(
+        enumerate_windows=enumerate,
+        show_window=lambda h, c=9: True,
+        set_foreground=lambda h: True,
+        get_foreground=lambda: fg,
+    )
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
@@ -60,6 +74,11 @@ def test_register_display_focus_roundtrip(server):
     assert st == 200
     iid, slot = reg["instanceId"], reg["slot"]
     assert slot == 0
+
+    # give the broker a focus adapter whose window carries the instance's real
+    # unique launch-token marker (the realistic launcher->window-title binding)
+    marker = broker.registry.instances[iid].focus_target["opaqueId"]
+    broker.focus = mk_focus([(7, f"[{marker}] x")], 7)
 
     # display: home session absent -> amber (idle)
     st, disp = req("GET", f"{base}/v1/display", token)

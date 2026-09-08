@@ -124,13 +124,16 @@ def r_launch_six_unique_stable(h: Harness) -> None:
 
 
 def r_two_same_directory_separate(h: Harness) -> None:
-    _, s0 = h.adapter.register_launch("/d/same", "one", pid=LIVE)
-    _, s1 = h.adapter.register_launch("/d/same", "two", pid=2)
+    # two TUIs in the SAME directory share an alias but must get separate
+    # buttons AND separate, unambiguous focus targets (unique launch token).
+    _, s0 = h.adapter.register_launch("/d/same", "same", pid=LIVE)
+    _, s1 = h.adapter.register_launch("/d/same", "same", pid=LIVE)
     assert s0 != s1
-    # separate focus targets
     a = list(h.adapter.launches())[0]
     b = list(h.adapter.launches())[1]
     assert a.instance.focus_target["opaqueId"] != b.instance.focus_target["opaqueId"]
+    # each marker is a unique substring (no window-title collision)
+    assert a.instance.focus_target["opaqueId"] not in b.instance.focus_target["opaqueId"]
 
 
 def r_generate_long_response_green_then_amber(h: Harness) -> None:

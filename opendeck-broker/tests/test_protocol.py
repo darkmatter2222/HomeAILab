@@ -29,7 +29,8 @@ def test_register_launch_gets_slot_and_identity():
     assert slot == 0
     inst = reg.instances[iid]
     assert inst.identity_label == "homeai"
-    assert inst.focus_target["opaqueId"] == "opencode:homeai"
+    # unique launch token: alias prefix + per-launch suffix
+    assert inst.focus_target["opaqueId"].startswith("opencode:homeai-")
     assert inst.process.pid == 4242
 
 

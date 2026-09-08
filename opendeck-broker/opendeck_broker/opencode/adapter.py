@@ -52,7 +52,14 @@ class OpenCodeAdapter:
         focus_target: Optional[dict] = None,
     ) -> tuple[str, Optional[int]]:
         instance_id = uuid.uuid4().hex
-        marker = f"opencode:{alias}"
+        # Unique launch token per TUI (research: "Launch token plus validated
+        # window and terminal binding"). Two TUIs in the same directory share
+        # an alias but must get distinct window identities, so the marker is
+        # suffixed with a per-launch id. The on-key label stays the alias.
+        if focus_target and focus_target.get("opaqueId"):
+            marker = focus_target["opaqueId"]
+        else:
+            marker = f"opencode:{alias}-{instance_id[:6]}"
         instance = Instance(
             instance_id=instance_id,
             process=Process(pid=pid, start_time=start_time),

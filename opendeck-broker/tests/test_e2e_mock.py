@@ -45,6 +45,19 @@ def build(states=None, windows=None, foreground_after=None):
     return broker, adapter, device, obs
 
 
+def focus_for_instances(broker, iids, foreground_after=None):
+    """Build a focus adapter whose windows carry each instance's actual unique
+    launch-token marker (the realistic launcher->window-title binding)."""
+    windows = []
+    for i, iid in enumerate(iids):
+        inst = broker.registry.instances.get(iid)
+        if inst is None:
+            continue
+        marker = inst.focus_target["opaqueId"]
+        windows.append((100 + i, f"[{marker}] opencode"))
+    return focus_for(windows, foreground_after if foreground_after is not None else (100 + (len(iids) - 1) if iids else 0))
+
+
 def test_start_uploads_six_black():
     broker, *_ = build()
     broker.start()
@@ -58,12 +71,11 @@ def device_keys(broker):
 
 def test_register_render_press_focus_cycle():
     broker, adapter, device, obs = build(
-        states={"/d/homeai": SessionState(directory="/d/homeai", has_session=True)},
-        windows=[(55, "[opencode:homeai] opencode")],
-        foreground_after=55,
+        states={"/d/homeai": SessionState(directory="/d/homeai", has_session=True)}
     )
     broker.start()
     iid, slot = adapter.register_launch("/d/homeai", "homeai", pid=LIVE)
+    broker.focus = focus_for_instances(broker, [iid])
     adapter.refresh()
     broker.render()
 

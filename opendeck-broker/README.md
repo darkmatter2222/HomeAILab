@@ -24,6 +24,13 @@ Six slots, row-major: top-left..top-right, then bottom-left..bottom-right.
 An instance keeps its slot until it closes (no compaction); a 7th launch runs
 but gets no button (overflow), never evicting a live occupant.
 
+**Window identity = unique launch token.** A press focuses by a per-launch
+marker (`opencode:<alias>-<launchid>`), not by project title or PID. Two TUIs in
+the same directory share an alias but get distinct markers, so focus is
+unambiguous (research section 10: "Launch token plus validated window and
+terminal binding"). The launcher sets the window title to this marker; focus
+scans for it and verifies the resulting foreground window.
+
 ## Package layout
 
 ```
