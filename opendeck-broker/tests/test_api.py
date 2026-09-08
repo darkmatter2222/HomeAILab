@@ -106,6 +106,19 @@ def test_register_display_focus_roundtrip(server):
     assert st == 200 and diag["registry"]["slots"][0]["instance_id"] == iid
 
 
+def test_focus_unknown_instance_is_stale(server):
+    # research section 7: a press/focus accepts a known instance id, not an
+    # arbitrary command. An unknown id must resolve to STALE, not crash or
+    # claim success.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, foc = req("POST", f"{base}/v1/focus", token,
+                  {"instanceId": "does-not-exist"})
+    assert st == 200
+    assert foc["status"] == "stale"
+
+
 def test_deck_sse_initial_snapshot(server):
     import http.client
 
