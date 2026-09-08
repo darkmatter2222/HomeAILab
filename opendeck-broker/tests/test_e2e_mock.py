@@ -112,6 +112,26 @@ def test_broker_sweep_with_lease_frees_quiet_producer():
     assert reg.frame()[0].appearance is DisplayAppearance.BLACK
 
 
+def test_broker_diagnostics_reports_full_state():
+    # broker.diagnostics aggregates the registry state, the focus log tail, the
+    # pending-press count, and the device connection state (surfaced by the
+    # /v1/diagnostics endpoint).
+    from opendeck_broker.model import Instance, Process, Status
+
+    reg = Registry()
+    device = MockDevice()
+    device.connect()
+    broker = Broker(registry=reg, device=device, lease_seconds=None)
+    reg.register(Instance(instance_id="a", process=Process(pid=LIVE),
+                          ui_attachment_id="a", directory="/a", status=Status.IDLE))
+    diag = broker.diagnostics()
+    assert diag["device_connected"] is True
+    assert diag["pending_presses"] == 0
+    assert diag["focus_log_tail"] == []
+    assert diag["registry"]["slots"][0]["instance_id"] == "a"
+    assert diag["registry"]["broker_epoch"] == reg.broker_epoch
+
+
 def test_stop_blacks_out_colored_keys():
     # research section 8: graceful shutdown black-outs the keys.
     broker, adapter, device, obs = build(
