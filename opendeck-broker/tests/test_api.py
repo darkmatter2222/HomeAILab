@@ -227,3 +227,15 @@ def test_stale_snapshot_conflict(server):
     # a second snapshot reuses the same seq internally via adapter; applied True
     st, snap = req("PUT", f"{base}/v1/instances/{iid}/snapshot", token, {"status": "idle"})
     assert st == 200 and snap["applied"] is True
+
+
+def test_snapshot_unknown_instance_is_404(server):
+    # a snapshot for an instance id the broker never registered is a clean 404,
+    # not a crash or a 409 conflict.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, body = req("PUT", f"{base}/v1/instances/does-not-exist/snapshot", token,
+                   {"status": "busy"})
+    assert st == 404
+    assert body.get("error") == "not_found"
