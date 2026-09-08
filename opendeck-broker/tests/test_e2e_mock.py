@@ -194,6 +194,31 @@ def test_raw_hid_poll_emits_press_edges():
     assert seen == [0, 3]
 
 
+def test_base_press_handler_dispatch():
+    # set_key_press_handler + on_key: with no handler registered, on_key is a
+    # safe no-op (no crash); once a handler is registered it is invoked on the
+    # press edge (one edge per press).
+    from opendeck_broker.device.base import DeviceAdapter
+
+    class Concrete(DeviceAdapter):
+        def connect(self) -> bool:
+            return True
+
+        def close(self) -> None:
+            pass
+
+        def set_key_image(self, slot: int, image: bytes) -> bool:
+            return True
+
+    d = Concrete()
+    seen = []
+    d.on_key(3)  # no handler yet -> safe no-op
+    assert seen == []
+    d.set_key_press_handler(seen.append)
+    d.on_key(3)  # handler registered -> invoked with the slot index
+    assert seen == [3]
+
+
 def test_raw_hid_poll_ignores_out_of_range_reports():
     # a report whose key index is at/above the Mini's 6 keys (idx >= rows*cols)
     # must not be emitted as a press (guards against malformed reports).
