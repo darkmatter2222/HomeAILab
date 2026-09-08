@@ -242,6 +242,20 @@ def test_display_multiple_instances_use_distinct_slots(server):
     assert disp["frame"][reg2["slot"]]["appearance"] != "black"
 
 
+def test_register_mints_a_fresh_instance_id_each_time(server):
+    # each register mints a fresh instanceId (even for the same directory):
+    # the broker tracks instances by id, not by directory.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg1 = req("POST", f"{base}/v1/instances/register", token,
+                   {"directory": "/d/same", "alias": "a", "pid": 1001})
+    st, reg2 = req("POST", f"{base}/v1/instances/register", token,
+                   {"directory": "/d/same", "alias": "a", "pid": 1001})
+    assert reg1["instanceId"] != reg2["instanceId"]  # fresh ids
+    assert reg1["slot"] != reg2["slot"]  # distinct slots
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
