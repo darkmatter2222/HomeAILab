@@ -77,6 +77,18 @@ def test_register_launch_normalizes_backslash_directory():
     assert reg.frame()[slot].appearance is DisplayAppearance.RUN  # matched via normalized dir
 
 
+def test_refresh_pushes_pending_permission_to_input():
+    # a launch whose directory has a BUSY session with an outstanding permission
+    # shows INPUT, not RUN -- the reducer's INPUT-over-RUN precedence holds
+    # end-to-end through the adapter's refresh.
+    reg, adapter = adapter_with(
+        {"/d/a": SessionState(directory="/d/a", has_session=True, status=Status.BUSY, pending_permissions=["p-1"])}
+    )
+    adapter.register_launch("/d/a", "a", pid=LIVE)
+    adapter.refresh()
+    assert reg.frame()[0].appearance is DisplayAppearance.INPUT
+
+
 def test_home_screen_no_session_is_idle_amber():
     # TUI open at its home screen: observer finds no session for the directory
     reg, adapter = adapter_with({})
