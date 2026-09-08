@@ -432,6 +432,26 @@ def test_both_pending_permission_and_question_are_input(tmp_path):
     assert len(st.pending_questions) == 1
 
 
+def test_mixed_pending_question_and_resolved_permission(tmp_path):
+    # a session with a pending question AND an already-replied permission: the
+    # pending question drives INPUT (has_pending_input True, 1 pending question),
+    # while the replied permission is NOT counted (pending_permissions empty).
+    # The two request kinds are tallied independently.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/mixed")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("part-rep", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "replied"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("part-quest", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/mixed"]
+    assert st.has_pending_input
+    assert len(st.pending_questions) == 1
+    assert st.pending_permissions == []
+
+
 def test_observer_opens_db_read_only(tmp_path, monkeypatch):
     # the observer must not grab a write lock on OpenCode's live store
     db, conn = make_db(tmp_path)
