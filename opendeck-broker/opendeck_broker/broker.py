@@ -40,6 +40,9 @@ class Broker:
         self.focus = focus
         self.image_size = image_size
         self.lease_seconds = lease_seconds
+        # tracks the device's last-seen connection state so maybe_reconnect()
+        # can detect a USB replug and reset the render cache (research section 8)
+        self._device_was_connected: bool = device.is_connected() if device else False
         # (slot, captured_instance_id, captured_generation) pending press edges
         self._press_queue: deque = deque()
         # diagnostics: last focus attempts
@@ -71,6 +74,8 @@ class Broker:
         self.invalidate_render_cache()
         self.upload_black_frame()
         self._started = True
+        # sync the reconnect detector so the first tick isn't a false positive
+        self._device_was_connected = self.device is not None and self.device.is_connected()
         return True
 
     def stop(self) -> None:
@@ -81,6 +86,21 @@ class Broker:
             if self.device is not None:
                 self.device.close()
             self._started = False
+
+    def maybe_reconnect(self) -> bool:
+        """Detect a (re)connected device and reset the render cache so the full
+        frame is re-uploaded, not skipped as "already sent" (research section 8,
+        acceptance B-22). Called once per tick; returns True only on the tick a
+        disconnect->connect transition is observed."""
+        if self.device is None:
+            return False
+        connected = self.device.is_connected()
+        if connected and not self._device_was_connected:
+            self.invalidate_render_cache()
+            self._device_was_connected = True
+            return True
+        self._device_was_connected = connected
+        return False
 
     # ------------------------------------------------------------------ #
     def invalidate_render_cache(self) -> None:

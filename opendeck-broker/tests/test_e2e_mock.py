@@ -108,6 +108,26 @@ def test_register_render_press_focus_cycle():
     assert status_after is DisplayAppearance.IDLE  # press did not mutate state
 
 
+def test_maybe_reconnect_reuploads_full_frame():
+    # research section 8 / B-22: a USB replug must re-upload the complete frame,
+    # not skip keys as "already sent". maybe_reconnect() detects the
+    # disconnect->connect transition and resets the render cache.
+    broker, adapter, device, obs = build(
+        states={"/d/a": SessionState(directory="/d/a", has_session=True, status="busy")}
+    )
+    broker.start()
+    adapter.register_launch("/d/a", "a", pid=LIVE)
+    adapter.refresh()
+    broker.render()
+    assert broker.maybe_reconnect() is False  # steady state: no transition
+    device.close()                            # USB pull
+    assert broker.maybe_reconnect() is False  # a disconnect is not a reconnect
+    device.connect()                          # USB replug
+    assert broker.maybe_reconnect() is True   # replug detected -> cache reset
+    broker.render()
+    assert device.uploaded_count() == 6  # the full frame was re-uploaded
+
+
 def test_render_caches_identical_images():
     # research section 11: don't re-upload an unchanged key over USB.
     broker, adapter, device, obs = build(

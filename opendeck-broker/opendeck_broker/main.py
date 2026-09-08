@@ -70,6 +70,7 @@ def run(config: Optional[Config] = None, use_mock: bool = False, tick: Optional[
         ticks = 0
         while True:
             stack.device.poll()
+            stack.broker.maybe_reconnect()  # USB replug -> reset cache, re-upload
             stack.adapter.refresh()
             stack.broker.sweep()
             stack.broker.render()
