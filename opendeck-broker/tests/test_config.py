@@ -69,3 +69,14 @@ def test_token_is_stable_and_local(monkeypatch, tmp_path):
     assert len(t1) >= 16
     # stored under the broker home
     assert (tmp_path / "token").exists()
+
+
+def test_token_fallback_when_store_unwritable(monkeypatch, tmp_path):
+    # if the token store can't be read/written (a permissions error, or the path
+    # is occupied), token() falls back to a fresh in-memory token rather than
+    # crashing -- the broker can still gate the loopback API.
+    monkeypatch.setenv("OPENDECK_BROKER_HOME", str(tmp_path))
+    (tmp_path / "token").mkdir()  # make the token path a dir so read/write raises
+    t = Config().token()
+    assert len(t) == 32  # secrets.token_hex(16) -> 32 hex chars
+    assert t
