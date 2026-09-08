@@ -577,6 +577,27 @@ def test_running_tool_with_running_question_is_busy_and_input(tmp_path):
     assert len(st.pending_questions) == 1
 
 
+def test_running_tool_with_running_permission_is_busy_and_input(tmp_path):
+    # a session with a running tool AND a permission whose status is "running" (not
+    # in the resolved set): the running tool drives BUSY, and the running permission
+    # is still an unresolved request, so has_pending_input is True. The reducer
+    # would show INPUT (pending beats busy). The mirror of the running-question case
+    # for the other request kind.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/runp")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-perm", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "running"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/runp"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_permissions) == 1
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
