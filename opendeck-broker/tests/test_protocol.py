@@ -64,6 +64,19 @@ def test_refresh_pushes_pending_question_to_input():
     assert reg.frame()[0].appearance is DisplayAppearance.INPUT
 
 
+def test_register_launch_normalizes_backslash_directory():
+    # register_launch keys the instance by a normalized directory (backslashes ->
+    # forward slashes, trailing slash stripped), so a refresh whose observer is
+    # keyed the same way matches -- a Windows path and its normalized form agree.
+    reg = Registry()
+    states = {"C:/proj/win": SessionState(directory="C:/proj/win", has_session=True, status=Status.BUSY)}
+    adapter = OpenCodeAdapter(reg, FakeObserver(states))
+    iid, slot = adapter.register_launch(r"C:\proj\win", "win", pid=LIVE)
+    assert reg.instances[iid].directory == "C:/proj/win"  # backslashes normalized
+    adapter.refresh()
+    assert reg.frame()[slot].appearance is DisplayAppearance.RUN  # matched via normalized dir
+
+
 def test_home_screen_no_session_is_idle_amber():
     # TUI open at its home screen: observer finds no session for the directory
     reg, adapter = adapter_with({})
