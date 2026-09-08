@@ -46,6 +46,15 @@ def test_release_is_idempotent_enough_to_reacquire():
     c.release()
 
 
+def test_release_without_acquire_is_safe():
+    # release() before any acquire() is a defensive no-op (no held handle /
+    # lockfile), not a crash -- a broker that failed to start still shuts down
+    # cleanly.
+    b = BrokerLock()
+    b.release()  # must not raise
+    b.release()  # and a second release is equally safe
+
+
 def test_lockfile_fallback_excludes_and_releases(monkeypatch, tmp_path):
     # the portable lockfile path (non-Windows) must exclude a second instance
     # and clean up its lockfile on release so a later broker can acquire.
