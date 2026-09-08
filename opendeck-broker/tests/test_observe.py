@@ -495,6 +495,30 @@ def test_mixed_pending_and_resolved_questions(tmp_path):
     assert len(st.pending_questions) == 1  # only the pending one, not the completed one
 
 
+def test_running_tool_with_resolved_question_and_permission(tmp_path):
+    # a session with a running tool AND a completed question AND a replied
+    # permission: the running tool drives BUSY (green), and BOTH resolved requests
+    # are excluded from the pending tally -- has_pending_input is False, so the
+    # status is BUSY, not INPUT. The resolved-status filter works for both kinds.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/resolved")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-quest", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "completed"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-perm", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "permission", "state": {"status": "replied"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/resolved"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is False
+    assert st.pending_questions == []
+    assert st.pending_permissions == []
+
+
 def test_running_tool_with_completed_question(tmp_path):
     # a session with a running tool AND a completed question: the running tool
     # drives BUSY (green) and the completed question is NOT pending (the question
