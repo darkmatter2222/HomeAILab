@@ -290,6 +290,24 @@ def test_display_slot_goes_black_when_instance_dies(server):
     assert disp["frame"][slot]["appearance"] == "black"
 
 
+def test_diagnostics_reflects_multiple_registered_instances(server):
+    # the /v1/diagnostics endpoint reflects the full registry state: with
+    # multiple instances, the diagnostics show each registered slot.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg1 = req("POST", f"{base}/v1/instances/register", token,
+                   {"directory": "/d/a", "alias": "a", "pid": 1001})
+    st, reg2 = req("POST", f"{base}/v1/instances/register", token,
+                   {"directory": "/d/b", "alias": "b", "pid": 1002})
+    st, diag = req("GET", f"{base}/v1/diagnostics", token)
+    assert st == 200
+    slots = diag["registry"]["slots"]
+    assert len(slots) == 6
+    assert slots[reg1["slot"]]["instance_id"] == reg1["instanceId"]
+    assert slots[reg2["slot"]]["instance_id"] == reg2["instanceId"]
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
