@@ -153,3 +153,38 @@ def test_lease_sweep_heartbeat_keeps_instance_alive():
     r.heartbeat("a")
     assert r.sweep_expired(lease_seconds=10, now=time.monotonic()) == []
     assert "a" in r.instances
+
+
+def test_to_diagnostics_reports_slots_overflow_and_live():
+    # the diagnostics payload (surfaced by /v1/diagnostics) must reflect the six
+    # slots, the overflow set, and every live instance's status.
+    r = Registry()
+    r.register(inst("a"))
+    r.register(inst("b", status=Status.BUSY))
+    for i in range(2, 6):  # fill the remaining slots so the next one overflows
+        r.register(inst(f"x{i}"))
+    r.register(inst("overflow7"))
+    diag = r.to_diagnostics()
+    assert diag["broker_epoch"] == r.broker_epoch
+    assert len(diag["slots"]) == 6
+    assert diag["slots"][0]["instance_id"] == "a"
+    assert diag["slots"][1]["instance_id"] == "b"
+    assert diag["overflow"] == ["overflow7"]
+    ids = {i["instanceId"] for i in diag["live_instances"]}
+    assert ids == {"a", "b", "x2", "x3", "x4", "x5", "overflow7"}
+    b = next(i for i in diag["live_instances"] if i["instanceId"] == "b")
+    assert b["status"] == "busy"
+
+
+def test_resolve_maps_instance_to_current_slot_state():
+    # resolve maps a live instance to its current SlotState (a focus target);
+    # an unknown instance resolves to None.
+    from opendeck_broker.model import DisplayAppearance
+
+    r = Registry()
+    r.register(inst("a", status=Status.IDLE))
+    state = r.resolve("a")
+    assert state is not None
+    assert state.instance_id == "a"
+    assert state.appearance is DisplayAppearance.IDLE
+    assert r.resolve("missing") is None
