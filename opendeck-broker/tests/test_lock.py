@@ -55,6 +55,18 @@ def test_release_without_acquire_is_safe():
     b.release()  # and a second release is equally safe
 
 
+def test_release_lockfile_when_absent_is_safe(monkeypatch, tmp_path):
+    # _release_lockfile() when the lockfile doesn't exist (or was already
+    # removed) is a defensive no-op, not a crash -- a broker whose lockfile was
+    # cleared externally still shuts down cleanly.
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    b = BrokerLock()
+    b._release_lockfile()  # no lockfile set -> no-op
+    b._lockfile = tmp_path / "opendeck-broker.lock"  # a path that doesn't exist
+    b._release_lockfile()  # path set but absent -> no-op
+    b._release_lockfile()  # idempotent
+
+
 def test_lockfile_fallback_excludes_and_releases(monkeypatch, tmp_path):
     # the portable lockfile path (non-Windows) must exclude a second instance
     # and clean up its lockfile on release so a later broker can acquire.
