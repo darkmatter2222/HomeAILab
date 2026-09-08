@@ -70,6 +70,35 @@ def device_keys(broker):
     return broker.device.uploaded_count()
 
 
+def test_broker_sweep_no_lease_is_noop():
+    # broker.sweep is the lease-based fallback cleanup; with no lease configured
+    # it must be a no-op (returns []) so it never frees a live slot.
+    from opendeck_broker.model import Instance, Process, Status
+
+    reg = Registry()
+    broker = Broker(registry=reg, device=MockDevice(), lease_seconds=None)
+    reg.register(Instance(instance_id="a", process=Process(pid=LIVE),
+                          ui_attachment_id="a", directory="/a", status=Status.IDLE))
+    assert broker.sweep() == []
+    assert reg.frame()[0].instance_id == "a"  # not freed
+
+
+def test_broker_sweep_with_lease_frees_quiet_producer():
+    # with a lease configured, broker.sweep delegates to the registry's
+    # lease-based cleanup and frees a producer that has gone quiet.
+    import time
+
+    from opendeck_broker.model import Instance, Process, Status
+
+    reg = Registry()
+    broker = Broker(registry=reg, device=MockDevice(), lease_seconds=0.01)
+    reg.register(Instance(instance_id="quiet", process=Process(pid=1),
+                          ui_attachment_id="quiet", directory="/q", status=Status.IDLE))
+    time.sleep(0.05)  # let the 10 ms lease expire
+    assert broker.sweep() == ["quiet"]
+    assert reg.frame()[0].appearance is DisplayAppearance.BLACK
+
+
 def test_stop_blacks_out_colored_keys():
     # research section 8: graceful shutdown black-outs the keys.
     broker, adapter, device, obs = build(
