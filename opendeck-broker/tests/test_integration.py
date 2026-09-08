@@ -100,3 +100,21 @@ def test_dead_process_clears_slot_via_real_loop(tmp_path):
     stack.broker.start()
     run_ticks(stack)
     assert stack.broker.registry.frame()[slot].appearance is DisplayAppearance.BLACK
+
+
+def test_run_entry_point_tick_loop_and_lock_cleanup(tmp_path):
+    # the real entry point (main.run), not just build_stack: it acquires the
+    # single-writer lock, opens the device + starts the API, runs the full tick
+    # loop (poll -> refresh -> sweep -> render -> process_presses) for a bounded
+    # number of ticks, then releases the lock and stops the API + broker.
+    from opendeck_broker.lock import BrokerLock
+    from opendeck_broker.main import run
+
+    db = make_db(tmp_path)
+    cfg = Config(db_path=db, port=0)
+    rc = run(config=cfg, use_mock=True, tick=0.01, max_ticks=3)
+    assert rc == 0
+    # the single-writer lock must be released so a second broker can start
+    lock = BrokerLock()
+    assert lock.acquire() is True
+    lock.release()
