@@ -97,6 +97,18 @@ def test_home_screen_no_session_is_idle_amber():
     assert reg.frame()[0].appearance is DisplayAppearance.IDLE
 
 
+def test_refresh_with_existing_idle_session_is_idle_amber():
+    # a launch whose directory has an existing IDLE session (has_session=True, no
+    # pending, no recent activity) shows IDLE (amber) -- the "ready for another
+    # prompt" state, distinct from the home-screen-no-session case.
+    reg, adapter = adapter_with(
+        {"/d/a": SessionState(directory="/d/a", has_session=True, status=Status.IDLE)}
+    )
+    adapter.register_launch("/d/a", "a", pid=LIVE)
+    adapter.refresh()
+    assert reg.frame()[0].appearance is DisplayAppearance.IDLE
+
+
 def test_two_launches_same_directory_separate_slots():
     reg, adapter = adapter_with({})
     _, s0 = adapter.register_launch("/d/same", "one", pid=LIVE)
