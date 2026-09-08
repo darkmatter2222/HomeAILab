@@ -37,6 +37,12 @@ def test_is_alive_unknown_pid_is_alive():
     assert is_alive(-1) is True
 
 
+def test_is_alive_none_pid_is_alive():
+    # a None pid (unknown) is treated as alive, like 0 or -1 -- a missing
+    # registration must never clear a slot.
+    assert is_alive(None) is True
+
+
 def test_start_time_ms_live_and_invalid():
     # _start_time_ms returns the creation time (epoch ms) for a live pid and
     # None when the pid cannot be resolved (the PID-reuse guard pairs pid with a
