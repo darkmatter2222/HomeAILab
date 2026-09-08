@@ -137,6 +137,23 @@ def test_register_with_focus_target_binds_marker(server):
     assert broker.registry.instances[iid].focus_target["opaqueId"] == "my-marker"
 
 
+def test_focus_endpoint_no_matching_window_is_not_found(server):
+    # the /v1/focus endpoint resolves a press for a registered instance. The
+    # fixture's focus adapter has a window that does NOT carry this instance's
+    # marker, so the outcome is NOT_FOUND (no window to focus) -- a valid 200.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/x", "alias": "x", "pid": 1})
+    iid = reg["instanceId"]
+    gen = broker.registry.resolve(iid).generation
+    st, res = req("POST", f"{base}/v1/focus", token,
+                  {"instanceId": iid, "expectedGeneration": gen})
+    assert st == 200
+    assert res["status"] == "not_found"  # the fixture window lacks this marker
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
