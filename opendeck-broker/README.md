@@ -57,6 +57,8 @@ tools/
 tests/
   test_reducer.py / test_registry.py / test_protocol.py
   test_focus.py / test_observe.py / test_e2e_mock.py / test_api.py
+  test_config.py / test_images.py / test_integration.py / test_lock.py
+  test_process.py / test_acceptance.py
 ```
 
 ## Install + test
@@ -69,10 +71,10 @@ python tools/selftest.py         # simulated end-to-end demo
 python tools/demo_live.py        # render the real six-slot frame from the live DB
 ```
 
-`requirements.txt` needs `hidapi` (the `hid` Python binding, which on Windows also
-needs `hidapi.dll`) and `Pillow`. `elgato-streamdeck` is optional and preferred:
-it pins the Mini image/key-report protocol; without it the raw-`hid` fallback is
-used and must be confirmed by `probe_device.py`.
+`requirements.txt` needs `hid` (the python-hid / hidapi ctypes binding, which on
+Windows also needs `hidapi.dll`) and `Pillow`. `elgato-streamdeck` is optional and
+preferred: it pins the Mini image/key-report protocol; without it the raw-`hid`
+fallback is used and must be confirmed by `probe_device.py`.
 
 ## Run the broker
 
