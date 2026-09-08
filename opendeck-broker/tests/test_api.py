@@ -308,6 +308,15 @@ def test_diagnostics_reflects_multiple_registered_instances(server):
     assert slots[reg2["slot"]]["instance_id"] == reg2["instanceId"]
 
 
+def test_delete_unknown_instance_is_404(server):
+    # deleting an unknown instance is a 404 (the broker has no record of it).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, res = req("DELETE", f"{base}/v1/instances/nonexistent", token)
+    assert st == 404
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
