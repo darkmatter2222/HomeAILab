@@ -152,6 +152,19 @@ def test_register_with_focus_target_binds_marker(server):
     assert broker.registry.instances[iid].focus_target["opaqueId"] == "my-marker"
 
 
+def test_register_with_start_time_stores_it(server):
+    # a producer that registers with a startTime (the TUI process start time)
+    # has it stored on the instance's process, so the liveness check can use it.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/x", "alias": "x", "pid": 1, "startTime": 12345678})
+    assert st == 200
+    iid = reg["instanceId"]
+    assert broker.registry.instances[iid].process.start_time == 12345678
+
+
 def test_register_without_focus_target_mints_marker(server):
     # a producer that registers WITHOUT a pre-known focusTarget gets a minted
     # marker (opencode:<alias>-<6char>) on the instance, so a later press can
