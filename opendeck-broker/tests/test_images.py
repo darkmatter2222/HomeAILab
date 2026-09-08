@@ -13,14 +13,16 @@ def test_black_render_matches_black_frame():
 
 
 def test_distinct_appearances_produce_distinct_images():
-    # research sections 2, 9: each state has its own color, baked into one image
+    # research sections 2, 9: each state has its own image. UNKNOWN shares IDLE's
+    # amber, so its distinction comes from the "?" label -- all five must differ.
     imgs = [
         render_key(DisplayAppearance.RUN, "x"),
         render_key(DisplayAppearance.IDLE, "x"),
         render_key(DisplayAppearance.INPUT, "x"),
+        render_key(DisplayAppearance.UNKNOWN, "x"),
         render_key(DisplayAppearance.BLACK),
     ]
-    assert len(set(imgs)) == 4
+    assert len(set(imgs)) == 5
 
 
 def test_render_is_deterministic():
