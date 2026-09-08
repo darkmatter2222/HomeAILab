@@ -148,6 +148,16 @@ def test_recent_part_update_is_busy(tmp_path):
     assert snap["/proj/b"].status is Status.BUSY
 
 
+def test_recent_part_update_with_completed_tool_is_busy(tmp_path):
+    # recency drives busy, not the tool status: a part updated within the window
+    # keeps the TUI busy even if the last tool has completed (fresh activity).
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/recentdone")
+    add_part(conn, "s1", {"type": "tool", "tool": "bash", "state": {"status": "completed"}}, upd=now_ms() - 2_000)
+    st = DbObserver(db).snapshot_by_directory()["/d/recentdone"]
+    assert st.status is Status.BUSY
+
+
 def test_old_part_update_is_idle(tmp_path):
     db, conn = make_db(tmp_path)
     old = now_ms() - 120_000
