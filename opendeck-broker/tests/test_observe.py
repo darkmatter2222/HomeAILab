@@ -103,6 +103,23 @@ def test_child_session_pending_request_folds_into_parent_slot(tmp_path):
     assert len(snap["/proj/shared"].pending_questions) == 1
 
 
+def test_multiple_pending_questions_are_all_counted(tmp_path):
+    # a session with several unresolved question parts reports each one
+    # (pending_questions grows with the count, not capped at one).
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/proj/multi")
+    for i in range(3):
+        conn.execute(
+            "INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+            (f"q-{i}", "s1", now_ms(),
+             json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})),
+        )
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/proj/multi"]
+    assert st.has_pending_input
+    assert len(st.pending_questions) == 3
+
+
 def test_completed_question_is_not_input(tmp_path):
     db, conn = make_db(tmp_path)
     add_session(conn, "s1", "/proj/a")
