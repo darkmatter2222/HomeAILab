@@ -123,6 +123,20 @@ def test_register_with_empty_body_uses_defaults(server):
     assert reg["slot"] in (0, 1, 2, 3, 4, 5)
 
 
+def test_register_with_focus_target_binds_marker(server):
+    # a producer may register with a pre-known focusTarget (e.g. the launcher
+    # already minted the window-title marker): the instance's focus_target then
+    # carries that marker, so a later press focuses the right window.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/x", "focusTarget": {"opaqueId": "my-marker"}})
+    assert st == 200
+    iid = reg["instanceId"]
+    assert broker.registry.instances[iid].focus_target["opaqueId"] == "my-marker"
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
