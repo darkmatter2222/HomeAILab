@@ -31,12 +31,22 @@ class BrokerLock:
         import ctypes
 
         kernel32 = ctypes.windll.kernel32
-        self._handle = kernel32.CreateMutexW(None, False, LOCK_NAME)
+        # A HANDLE is 64-bit; the default c_int restype would truncate it and
+        # CloseHandle would then release the wrong handle (leaking the mutex).
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        handle = kernel32.CreateMutexW(None, False, LOCK_NAME)
         last_error = kernel32.GetLastError()
-        if self._handle is None:
+        if handle is None:
             return False
-        # ERROR_ALREADY_EXISTS (183) means another broker holds it.
-        return last_error != 183
+        if last_error == 183:
+            # ERROR_ALREADY_EXISTS: another broker owns it. Release OUR handle
+            # so we don't keep the mutex alive after the owner releases it.
+            kernel32.CloseHandle(handle)
+            self._handle = None
+            return False
+        self._handle = handle
+        return True
 
     def _acquire_lockfile(self) -> bool:
         path = Path(tempfile.gettempdir()) / "opendeck-broker.lock"
@@ -61,7 +71,9 @@ class BrokerLock:
         if os.name == "nt" and self._handle is not None:
             import ctypes
 
-            ctypes.windll.kernel32.CloseHandle(self._handle)
+            kernel32 = ctypes.windll.kernel32
+            kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+            kernel32.CloseHandle(self._handle)
             self._handle = None
         else:
             self._release_lockfile()
