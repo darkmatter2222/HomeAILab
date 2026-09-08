@@ -476,6 +476,25 @@ def test_running_tool_with_both_pending_requests(tmp_path):
     assert len(st.pending_questions) == 1
 
 
+def test_mixed_pending_and_resolved_questions(tmp_path):
+    # a session with a pending question AND an already-completed question: the
+    # pending question drives INPUT (has_pending_input True) and is the only one
+    # counted (pending_questions has 1 entry, not 2) -- resolved questions are
+    # excluded from the pending tally.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/mq")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("part-pend", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "pending"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("part-done", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "completed"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/mq"]
+    assert st.has_pending_input
+    assert len(st.pending_questions) == 1  # only the pending one, not the completed one
+
+
 def test_observer_opens_db_read_only(tmp_path, monkeypatch):
     # the observer must not grab a write lock on OpenCode's live store
     db, conn = make_db(tmp_path)
