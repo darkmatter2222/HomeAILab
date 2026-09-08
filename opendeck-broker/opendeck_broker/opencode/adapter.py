@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..model import Instance, Process, Status
+from ..process import is_alive
 from ..registry import Registry
 from .observe import DbObserver, _norm_dir
 
@@ -78,6 +79,12 @@ class OpenCodeAdapter:
             states, db_ok = {}, False
 
         for launch in list(self._launches.values()):
+            # Local process-exit observation clears the slot immediately,
+            # regardless of any saved conversation (research sections 6, 7).
+            proc = launch.instance.process
+            if not is_alive(proc.pid, proc.start_time):
+                self.mark_dead(launch.instance_id)
+                continue
             inst = launch.instance
             st = states.get(_norm_dir(launch.directory))
             inst.telemetry_trusted = db_ok

@@ -1,3 +1,5 @@
+import os
+
 from opendeck_broker.broker import Broker
 from opendeck_broker.device.mock import MockDevice
 from opendeck_broker.focus.windows import FocusStatus, WindowsFocusAdapter
@@ -5,6 +7,9 @@ from opendeck_broker.model import DisplayAppearance
 from opendeck_broker.opencode.adapter import OpenCodeAdapter
 from opendeck_broker.opencode.observe import SessionState
 from opendeck_broker.registry import Registry
+
+# guaranteed-alive pid so refresh()'s process-exit observation keeps the slot
+LIVE = os.getpid()
 
 
 class FakeObserver:
@@ -58,7 +63,7 @@ def test_register_render_press_focus_cycle():
         foreground_after=55,
     )
     broker.start()
-    iid, slot = adapter.register_launch("/d/homeai", "homeai", pid=1)
+    iid, slot = adapter.register_launch("/d/homeai", "homeai", pid=LIVE)
     adapter.refresh()
     broker.render()
 
@@ -86,7 +91,7 @@ def test_press_on_black_key_does_nothing():
 def test_running_turns_green_and_completes_to_idle():
     broker, adapter, device, obs = build(windows=[(1, "[opencode:a] x")], foreground_after=1)
     broker.start()
-    iid, slot = adapter.register_launch("/d/a", "a", pid=1)
+    iid, slot = adapter.register_launch("/d/a", "a", pid=LIVE)
     obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True, status="busy")
     adapter.refresh()
     broker.render()
@@ -101,7 +106,7 @@ def test_running_turns_green_and_completes_to_idle():
 def test_two_pending_requests_stay_input_until_both_resolved():
     broker, adapter, device, obs = build()
     broker.start()
-    adapter.register_launch("/d/a", "a", pid=1)
+    adapter.register_launch("/d/a", "a", pid=LIVE)
     obs.states["/d/a"] = SessionState(
         directory="/d/a", has_session=True, pending_questions=["q1"], pending_permissions=["p1"]
     )
@@ -123,7 +128,7 @@ def test_two_pending_requests_stay_input_until_both_resolved():
 def test_close_clears_slot_to_black():
     broker, adapter, device, obs = build()
     broker.start()
-    iid, slot = adapter.register_launch("/d/a", "a", pid=1)
+    iid, slot = adapter.register_launch("/d/a", "a", pid=LIVE)
     adapter.refresh()
     broker.render()
     assert broker.registry.frame()[slot].instance_id is not None
@@ -139,14 +144,14 @@ def test_stale_press_after_slot_reuse():
         windows=[(1, "[opencode:a] x"), (2, "[opencode:b] y")], foreground_after=2
     )
     broker.start()
-    _, s0 = adapter.register_launch("/d/a", "a", pid=1)
+    _, s0 = adapter.register_launch("/d/a", "a", pid=LIVE)
     adapter.refresh()
     # capture a press edge for 'a' on slot 0
     device.inject_press(s0)
     # before processing, 'a' dies and 'b' takes the same slot (new generation)
     a_iid = list(adapter.launches())[0].instance_id
     adapter.mark_dead(a_iid)
-    b_iid, s1 = adapter.register_launch("/d/a", "b", pid=2)
+    b_iid, s1 = adapter.register_launch("/d/a", "b", pid=LIVE)
     assert s1 == s0  # same slot, new generation
     results = broker.process_presses()
     # the delayed press was captured for 'a'; it must not focus 'b'

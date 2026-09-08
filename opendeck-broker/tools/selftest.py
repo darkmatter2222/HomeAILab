@@ -8,6 +8,7 @@ probe_focus.py.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -58,8 +59,9 @@ def main() -> int:
 
     print_frame(broker, "cold start: six black")
 
-    a, sa = adapter.register_launch("/d/homeai", "homeai", pid=11)
-    b, sb = adapter.register_launch("/d/ryans", "ryans", pid=22)
+    LIVE = os.getpid()
+    a, sa = adapter.register_launch("/d/homeai", "homeai", pid=LIVE)
+    b, sb = adapter.register_launch("/d/ryans", "ryans", pid=LIVE)
     obs.states["/d/homeai"] = SessionState(directory="/d/homeai", has_session=True, status="busy")
     obs.states["/d/ryans"] = SessionState(directory="/d/ryans", has_session=True)
     adapter.refresh()

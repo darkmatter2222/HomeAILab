@@ -1,7 +1,12 @@
+import os
+
 from opendeck_broker.model import DisplayAppearance, Status
 from opendeck_broker.opencode.adapter import OpenCodeAdapter
 from opendeck_broker.opencode.observe import SessionState
 from opendeck_broker.registry import Registry
+
+# guaranteed-alive pid so refresh()'s process-exit observation keeps the slot
+LIVE = os.getpid()
 
 
 class FakeObserver:
@@ -30,7 +35,7 @@ def test_register_launch_gets_slot_and_identity():
 
 def test_refresh_pushes_busy_to_green():
     reg, adapter = adapter_with({"/d/a": SessionState(directory="/d/a", has_session=True, status=Status.BUSY)})
-    iid, _ = adapter.register_launch("/d/a", "a", pid=1)
+    iid, _ = adapter.register_launch("/d/a", "a", pid=LIVE)
     adapter.refresh()
     assert reg.frame()[0].appearance is DisplayAppearance.RUN
 
@@ -39,7 +44,7 @@ def test_refresh_pushes_pending_question_to_input():
     reg, adapter = adapter_with(
         {"/d/a": SessionState(directory="/d/a", has_session=True, status=Status.IDLE, pending_questions=["q-1"])}
     )
-    adapter.register_launch("/d/a", "a", pid=1)
+    adapter.register_launch("/d/a", "a", pid=LIVE)
     adapter.refresh()
     assert reg.frame()[0].appearance is DisplayAppearance.INPUT
 
@@ -47,14 +52,14 @@ def test_refresh_pushes_pending_question_to_input():
 def test_home_screen_no_session_is_idle_amber():
     # TUI open at its home screen: observer finds no session for the directory
     reg, adapter = adapter_with({})
-    adapter.register_launch("/d/fresh", "fresh", pid=1)
+    adapter.register_launch("/d/fresh", "fresh", pid=LIVE)
     adapter.refresh()
     assert reg.frame()[0].appearance is DisplayAppearance.IDLE
 
 
 def test_two_launches_same_directory_separate_slots():
     reg, adapter = adapter_with({})
-    _, s0 = adapter.register_launch("/d/same", "one", pid=1)
+    _, s0 = adapter.register_launch("/d/same", "one", pid=LIVE)
     _, s1 = adapter.register_launch("/d/same", "two", pid=2)
     assert s0 == 0
     assert s1 == 1
@@ -63,7 +68,7 @@ def test_two_launches_same_directory_separate_slots():
 
 def test_detach_clears_slot():
     reg, adapter = adapter_with({})
-    iid, slot = adapter.register_launch("/d/a", "a", pid=1)
+    iid, slot = adapter.register_launch("/d/a", "a", pid=LIVE)
     adapter.refresh()
     adapter.detach(iid)
     assert reg.frame()[slot].instance_id is None
@@ -72,14 +77,14 @@ def test_detach_clears_slot():
 
 def test_mark_dead_clears_slot():
     reg, adapter = adapter_with({})
-    iid, slot = adapter.register_launch("/d/a", "a", pid=1)
+    iid, slot = adapter.register_launch("/d/a", "a", pid=LIVE)
     adapter.mark_dead(iid)
     assert reg.frame()[slot].appearance is DisplayAppearance.BLACK
 
 
 def test_stale_snapshot_rejected_after_reregister_epoch():
     reg, adapter = adapter_with({})
-    iid, _ = adapter.register_launch("/d/a", "a", pid=1)
+    iid, _ = adapter.register_launch("/d/a", "a", pid=LIVE)
     # a delta from a different producer epoch is rejected
     old = reg.instances[iid]
     assert reg.accept_snapshot(old, "some-other-epoch", old.sequence + 5) is False

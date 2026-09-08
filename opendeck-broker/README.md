@@ -116,6 +116,13 @@ against SQLite fixtures in `tests/test_observe.py`. A TUI plugin (research
 section 5) is the preferred alternative if the installed runtime is verified to
 support it; the broker/registry/focus/device layers are unchanged either way.
 
+**Process-exit observation** (research sections 6, 7): on each tick the adapter
+checks each launch's process (PID + verified creation time, via `psutil` with a
+stdlib/ctypes fallback in `opendeck_broker/process.py`). When the OpenCode
+process dies, its slot clears to black immediately -- a saved conversation does
+not keep a dead TUI's button lit. A reused PID is guarded by the creation-time
+pair. See `tests/test_process.py`.
+
 ## Environment
 
 `OPENDECK_BROKER_HOST` (127.0.0.1), `OPENDECK_BROKER_PORT` (8899),

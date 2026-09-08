@@ -17,6 +17,7 @@ Report: opendeck-broker/acceptance-report.md
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -32,6 +33,11 @@ from opendeck_broker.model import DisplayAppearance  # noqa: E402
 from opendeck_broker.opencode.adapter import OpenCodeAdapter  # noqa: E402
 from opendeck_broker.opencode.observe import SessionState  # noqa: E402
 from opendeck_broker.registry import Registry  # noqa: E402
+
+
+# A process that is alive for the duration of the test, so refresh()'s
+# process-exit observation does not clear these slots mid-scenario.
+LIVE = os.getpid()
 
 
 class FakeObserver:
@@ -98,7 +104,7 @@ def r_cold_reboot_no_opencode(h: Harness) -> None:
 
 
 def r_launch_one_home_screen(h: Harness) -> None:
-    h.adapter.register_launch("/d/homeai", "homeai", pid=1)
+    h.adapter.register_launch("/d/homeai", "homeai", pid=LIVE)
     h.adapter.refresh()
     h.broker.render()
     assert h.ap(0) is DisplayAppearance.IDLE
@@ -107,7 +113,7 @@ def r_launch_one_home_screen(h: Harness) -> None:
 def r_launch_six_unique_stable(h: Harness) -> None:
     slots = []
     for i in range(6):
-        _, s = h.adapter.register_launch(f"/d/p{i}", f"p{i}", pid=100 + i)
+        _, s = h.adapter.register_launch(f"/d/p{i}", f"p{i}", pid=LIVE)
         slots.append(s)
     assert sorted(slots) == [0, 1, 2, 3, 4, 5]
     # stable: a refresh does not move them
@@ -118,7 +124,7 @@ def r_launch_six_unique_stable(h: Harness) -> None:
 
 
 def r_two_same_directory_separate(h: Harness) -> None:
-    _, s0 = h.adapter.register_launch("/d/same", "one", pid=1)
+    _, s0 = h.adapter.register_launch("/d/same", "one", pid=LIVE)
     _, s1 = h.adapter.register_launch("/d/same", "two", pid=2)
     assert s0 != s1
     # separate focus targets
@@ -128,7 +134,7 @@ def r_two_same_directory_separate(h: Harness) -> None:
 
 
 def r_generate_long_response_green_then_amber(h: Harness) -> None:
-    h.adapter.register_launch("/d/a", "a", pid=1)
+    h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True, status="busy")
     h.adapter.refresh(); h.broker.render()
     assert h.ap(0) is DisplayAppearance.RUN
@@ -138,7 +144,7 @@ def r_generate_long_response_green_then_amber(h: Harness) -> None:
 
 
 def r_long_tool_without_tokens_stays_green(h: Harness) -> None:
-    h.adapter.register_launch("/d/a", "a", pid=1)
+    h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True, status="busy")
     h.adapter.refresh(); h.broker.render()
     assert h.ap(0) is DisplayAppearance.RUN
@@ -149,14 +155,14 @@ def r_long_tool_without_tokens_stays_green(h: Harness) -> None:
 
 
 def r_auto_retry_is_green(h: Harness) -> None:
-    h.adapter.register_launch("/d/a", "a", pid=1)
+    h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True, status="retry")
     h.adapter.refresh(); h.broker.render()
     assert h.ap(0) is DisplayAppearance.RUN
 
 
 def r_permission_red_until_answered(h: Harness) -> None:
-    h.adapter.register_launch("/d/a", "a", pid=1)
+    h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True, status="idle", pending_permissions=["p1"])
     h.adapter.refresh(); h.broker.render()
     assert h.ap(0) is DisplayAppearance.INPUT
@@ -166,7 +172,7 @@ def r_permission_red_until_answered(h: Harness) -> None:
 
 
 def r_question_red_until_replied(h: Harness) -> None:
-    h.adapter.register_launch("/d/a", "a", pid=1)
+    h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True, pending_questions=["q1"])
     h.adapter.refresh(); h.broker.render()
     assert h.ap(0) is DisplayAppearance.INPUT
@@ -176,7 +182,7 @@ def r_question_red_until_replied(h: Harness) -> None:
 
 
 def r_two_pending_resolving_one_stays_red(h: Harness) -> None:
-    h.adapter.register_launch("/d/a", "a", pid=1)
+    h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True, pending_questions=["q1"], pending_permissions=["p1"])
     h.adapter.refresh(); h.broker.render()
     assert h.ap(0) is DisplayAppearance.INPUT
@@ -190,7 +196,7 @@ def r_two_pending_resolving_one_stays_red(h: Harness) -> None:
 
 def r_child_complete_parent_stays_green(h: Harness) -> None:
     # parent busy (generating). A child's completion must not demote the parent.
-    h.adapter.register_launch("/d/a", "a", pid=1)
+    h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True, status="busy")
     h.adapter.refresh(); h.broker.render()
     assert h.ap(0) is DisplayAppearance.RUN
@@ -201,7 +207,7 @@ def r_child_complete_parent_stays_green(h: Harness) -> None:
 
 
 def r_child_input_owning_tui_red_no_new_slot(h: Harness) -> None:
-    h.adapter.register_launch("/d/a", "a", pid=1)
+    h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True, pending_questions=["q-child"])
     h.adapter.refresh(); h.broker.render()
     assert h.ap(0) is DisplayAppearance.INPUT
@@ -212,7 +218,7 @@ def r_child_input_owning_tui_red_no_new_slot(h: Harness) -> None:
 
 def r_prose_question_is_idle(h: Harness) -> None:
     # final answer ends in ordinary prose -> no structured request -> amber
-    h.adapter.register_launch("/d/a", "a", pid=1)
+    h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True)
     h.adapter.refresh(); h.broker.render()
     assert h.ap(0) is DisplayAppearance.IDLE
@@ -227,7 +233,7 @@ def r_click_six_mixed_states_focus_no_mutation(h: Harness) -> None:
     }
     ids = []
     for i in range(6):
-        _, s = h.adapter.register_launch(f"/d/p{i}", f"p{i}", pid=100 + i)
+        _, s = h.adapter.register_launch(f"/d/p{i}", f"p{i}", pid=LIVE)
         ids.append((s, f"p{i}"))
     h.obs.states.update(states)
     h.adapter.refresh(); h.broker.render()
@@ -252,7 +258,7 @@ def r_click_black_key_nothing(h: Harness) -> None:
 
 
 def r_single_press_single_focus(h: Harness) -> None:
-    _, s = h.adapter.register_launch("/d/a", "a", pid=1)
+    _, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.broker.focus = make_focus(windows=[(7, "[opencode:a] x")], foreground_after=7)
     h.device.inject_press(s)
     res = h.broker.process_presses()
@@ -260,7 +266,7 @@ def r_single_press_single_focus(h: Harness) -> None:
 
 
 def r_switch_conversation_same_slot(h: Harness) -> None:
-    iid, s = h.adapter.register_launch("/d/a", "a", pid=1)
+    iid, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.adapter.refresh(); h.broker.render()
     first = h.broker.registry.frame()[s]
     # the selected session changes; the instance (and its slot) does not
@@ -273,7 +279,7 @@ def r_switch_conversation_same_slot(h: Harness) -> None:
 
 
 def r_close_shell_stays_open_slot_clears(h: Harness) -> None:
-    iid, s = h.adapter.register_launch("/d/a", "a", pid=1)
+    iid, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.adapter.refresh(); h.broker.render()
     assert h.broker.registry.frame()[s].instance_id is not None
     h.adapter.mark_dead(iid)  # OpenCode ended; wrapping shell may still be open
@@ -282,7 +288,7 @@ def r_close_shell_stays_open_slot_clears(h: Harness) -> None:
 
 
 def r_kill_terminal_slot_clears(h: Harness) -> None:
-    iid, s = h.adapter.register_launch("/d/a", "a", pid=1)
+    iid, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.adapter.refresh(); h.broker.render()
     h.adapter.mark_dead(iid)
     h.broker.render()
@@ -290,12 +296,12 @@ def r_kill_terminal_slot_clears(h: Harness) -> None:
 
 
 def r_pid_and_slot_reuse_no_crossing(h: Harness) -> None:
-    _, s = h.adapter.register_launch("/d/a", "a", pid=4242)
+    _, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.adapter.refresh()
     a_iid = list(h.adapter.launches())[0].instance_id
     h.device.inject_press(s)  # captured press for 'a'
     h.adapter.mark_dead(a_iid)
-    _, s2 = h.adapter.register_launch("/d/a", "b", pid=9999)  # new PID, same slot
+    _, s2 = h.adapter.register_launch("/d/a", "b", pid=LIVE)  # new instance, same slot
     assert s2 == s
     res = h.broker.process_presses()
     assert res[0]["result"] == "stale"  # old press must not hit the new occupant
@@ -311,14 +317,14 @@ def r_restart_broker_restores_input(h: Harness) -> None:
     dev2 = MockDevice()
     broker2 = Broker(registry=reg2, device=dev2, focus=make_focus())
     broker2.start()
-    adapter2.register_launch("/d/a", "a", pid=1)
+    adapter2.register_launch("/d/a", "a", pid=LIVE)
     adapter2.refresh()
     broker2.render()
     assert broker2.registry.frame()[0].appearance is DisplayAppearance.INPUT
 
 
 def r_device_reconnect_restores_full_frame(h: Harness) -> None:
-    _, s = h.adapter.register_launch("/d/a", "a", pid=1)
+    _, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.obs.states["/d/a"] = SessionState(directory="/d/a", has_session=True, status="busy")
     h.adapter.refresh(); h.broker.render()
     # simulate a USB reconnect: new device instance, full frame re-uploaded
@@ -341,7 +347,7 @@ def r_seventh_instance_overflow(h: Harness) -> None:
 
 
 def r_bridge_unavailable_unknown_not_indefinite(h: Harness) -> None:
-    _, s = h.adapter.register_launch("/d/a", "a", pid=1)
+    _, s = h.adapter.register_launch("/d/a", "a", pid=LIVE)
     h.broker.registry.mark_untrusted("a" if False else list(h.adapter.launches())[0].instance_id, False)
     h.broker.render()
     assert h.ap(s) is DisplayAppearance.UNKNOWN  # amber "?", not a lying green
