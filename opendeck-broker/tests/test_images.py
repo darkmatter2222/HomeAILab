@@ -23,6 +23,24 @@ def test_black_render_matches_black_frame():
     assert render_key(DisplayAppearance.BLACK, size=16) == black_frame(16)
 
 
+def test_probe_numbered_images_are_all_distinct():
+    # tools/probe_device.numbered_image must produce six distinct images so
+    # physical indexing is unambiguous (research build-order step 2).
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "opendeck_probe_device",
+        Path(__file__).resolve().parent.parent / "tools" / "probe_device.py",
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    imgs = [mod.numbered_image(i) for i in range(6)]
+    assert all(len(im) == 144 * 144 * 3 for im in imgs)  # valid 144x144 RGB
+    assert len(set(imgs)) == 6  # all six are distinct
+
+
 def test_distinct_appearances_produce_distinct_images():
     # research sections 2, 9: each state has its own image. UNKNOWN shares IDLE's
     # amber, so its distinction comes from the "?" label -- all five must differ.
