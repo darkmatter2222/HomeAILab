@@ -256,6 +256,21 @@ def test_register_mints_a_fresh_instance_id_each_time(server):
     assert reg1["slot"] != reg2["slot"]  # distinct slots
 
 
+def test_snapshot_for_deleted_instance_is_404(server):
+    # a snapshot for a deleted (freed) instance is a 404 (the instance is gone;
+    # the producer should re-register).
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/x", "alias": "x", "pid": 1})
+    iid = reg["instanceId"]
+    req("DELETE", f"{base}/v1/instances/{iid}", token)  # free the instance
+    st, res = req("PUT", f"{base}/v1/instances/{iid}/snapshot", token,
+                  {"status": "busy"})
+    assert st == 404
+
+
 def test_register_display_focus_roundtrip(server):
     api, port, broker = server
     token = api.token
