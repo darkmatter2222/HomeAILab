@@ -556,6 +556,27 @@ def test_running_tool_with_completed_question(tmp_path):
     assert st.has_pending_input is False
 
 
+def test_running_tool_with_running_question_is_busy_and_input(tmp_path):
+    # a session with a running tool AND a question whose status is "running" (not
+    # in the resolved set): the running tool drives BUSY, and the running question
+    # is still an unresolved request, so has_pending_input is True. The reducer
+    # would show INPUT (pending beats busy). This is the "tool is mid-flight and
+    # the model is simultaneously asking a structured question" case.
+    db, conn = make_db(tmp_path)
+    add_session(conn, "s1", "/d/runq2")
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-tool", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "bash", "state": {"status": "running"}})))
+    conn.execute("INSERT INTO part(id, session_id, time_updated, data) VALUES(?,?,?,?)",
+                 ("p-quest", "s1", now_ms(),
+                  json.dumps({"type": "tool", "tool": "question", "state": {"status": "running"}})))
+    conn.commit()
+    st = DbObserver(db).snapshot_by_directory()["/d/runq2"]
+    assert st.status is Status.BUSY
+    assert st.has_pending_input is True
+    assert len(st.pending_questions) == 1
+
+
 def test_multiple_running_tools_are_busy(tmp_path):
     # a session with two running tools is still BUSY (the active-tool tally is 2,
     # not 1, but the status is BUSY either way -- the count drives the tally, the
