@@ -152,6 +152,21 @@ def test_register_with_focus_target_binds_marker(server):
     assert broker.registry.instances[iid].focus_target["opaqueId"] == "my-marker"
 
 
+def test_register_without_focus_target_mints_marker(server):
+    # a producer that registers WITHOUT a pre-known focusTarget gets a minted
+    # marker (opencode:<alias>-<6char>) on the instance, so a later press can
+    # still focus the right window -- parallel to the provided-focusTarget case.
+    api, port, broker = server
+    token = api.token
+    base = f"http://127.0.0.1:{port}"
+    st, reg = req("POST", f"{base}/v1/instances/register", token,
+                  {"directory": "/d/x", "alias": "x"})
+    assert st == 200
+    iid = reg["instanceId"]
+    marker = broker.registry.instances[iid].focus_target["opaqueId"]
+    assert marker.startswith("opencode:x-")  # minted, not pre-known
+
+
 def test_focus_endpoint_no_matching_window_is_not_found(server):
     # the /v1/focus endpoint resolves a press for a registered instance. The
     # fixture's focus adapter has a window that does NOT carry this instance's
