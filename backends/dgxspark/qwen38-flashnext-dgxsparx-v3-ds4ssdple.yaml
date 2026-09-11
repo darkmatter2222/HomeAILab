@@ -247,7 +247,11 @@ services:
       - qwen3.8-flashnext-dgxsparx
 
     ports:
-      - "8006:8006"        # PUBLISH 8006 (fleet port). Router + clients hit this.
+      - "8401:8006"        # PUBLISH 8401 (vision contract 8400-8499) -> container 8006.
+                            # The Go router's dgxspark-flashnext-262k-01 backend points
+                            # at host port 8401 (router/config/router.yaml). 8006 (the
+                            # legacy/direct port) is NOT in the vision contract, so the
+                            # shim must publish 8401 to match the router + the launcher.
 
     environment:
       # proxy target = the ds4 engine (same compose network, service name)

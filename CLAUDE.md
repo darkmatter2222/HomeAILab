@@ -115,6 +115,29 @@ kept for reference + the `claude-cluster.bat` launcher.
 
 ---
 
+## 5.5 Claude Fleet Deck — `deck/` (Stream Deck Mini, local)
+
+A **custom Elgato Stream Deck plugin** (Node, self-contained like `router/`/`video/`)
+that makes the Stream Deck Mini the notification bar for every local Claude Code
+agent: launch, monitor (RAG running/waiting/idle), and focus. No cloud.
+
+- **Layout:** 6-key Mini. Top row = 3 identical "launch a session" keys (idle);
+  press → project menu (pages of 5 projects + a nav key, auto-return to main after
+  5 s idle). Bottom row = keep-for-later spare keys.
+- **Config:** `deck/projects.json` (`{alias, path, bat}` — the `homeai` example
+  points at this repo + `launchers/claude-router.bat`). Auto-detected manual
+  sessions land in `deck/projects.auto.json` (never clobbers the hand-written file).
+- **Session discovery** reads `~/.claude/sessions/` (alive-pid filter, recycled-pid
+  guard) and infers state from transcript mtime — so **any** Claude Code process,
+  even one started by hand, gets a button.
+- **Focus** = PID→HWND (Windows) with a title-match fallback; macOS via AppleScript.
+- **Build/test:** `cd deck && npm install && npm run build && npm test &&
+  npm run selftest`. Deploy = copy `dev.claudefleet.streamDeckPlugin/` to
+  `%APPDATA%\Elgato\StreamDeck\Plugins\` and restart Stream Deck. Publish via a
+  GitHub Release asset. See `deck/README.md`.
+
+---
+
 ## Port contract (permanent)
 
 | Range | Purpose | Live use |
