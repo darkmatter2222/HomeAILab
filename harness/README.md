@@ -61,7 +61,7 @@ Variables used by the launchers:
 | `opencode-3090-serve.bat`| Headless variant: `opencode serve --port 4096` for the Stream Deck bridge / `opencode attach` |
 | `opencode-5090.bat`      | Direct 5090 vLLM :8201 (router bypass)                        |
 | `opencode-5090-vision.bat`| Direct 5090 vLLM, 131K ctx, thinking on, vision enabled      |
-| `opencode-spark.bat`     | Direct DGX Spark :8401                                        |
+| `opencode-spark.bat`     | Direct DGX Spark SGLang :8420 (Flash-Next NVFP4, vision ON)   |
 
 ## copilot/
 

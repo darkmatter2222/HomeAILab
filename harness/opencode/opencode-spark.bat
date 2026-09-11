@@ -4,17 +4,21 @@ REM Load lab host IPs + router key from .env (harness\.env or the repo root .env
 call "%~dp0..\load-env.bat"
 
 REM ============================================================================
-REM OpenCode -> DIRECT DGX SPARK (GB10 / Blackwell) - Flash-Next 180B MoE
+REM OpenCode -> DIRECT DGX SPARK (GB10 / Blackwell) - Flash-Next NVFP4
 REM DIRECT BACKEND (router bypass)
 REM
-REM FULL 262,144-TOKEN CONTEXT / THINKING OFF
+REM FULL 262,144-TOKEN CONTEXT / THINKING OFF / VISION ON
 REM
 REM Direct backend:
 REM   DGX Spark (GB10)
 REM   Host         : ${HOST_DGXSPARK}
-REM   Port         : 8401  (port contract: 8400-8499 = vision)
-REM   Engine       : ds4 (C/CUDA fork) serving Qwen3.8-Flash-Next 180B MoE
-REM   Capability   : native vision (embedded Qwen tower, no mmproj)
+REM   Port         : 8420  (host) -> 30000 (container), published by the
+REM                      qwen38-flashnext-sglang Portainer stack. 8420 sits in
+REM                      the 8400-8499 vision contract range.
+REM   Engine       : SGLang (lmsysorg/sglang) serving RadixArk/Qwen3.8-Flash-Next-NVFP4
+REM   Served name  : qwen3.8-flash-next (model ID is still discovered via /v1/models)
+REM   Capability   : vision ON (no --language-only), NEXTN/MTP 2-1-3 spec decode
+REM   Context      : 262,144 native; 524,288-token shared pool, max 4 running
 REM   Caveat       : ~60-120 s cold TTFT (SSD-PLE prefill)
 REM
 REM This launcher builds an isolated temporary OpenCode config so it does NOT
@@ -46,8 +50,9 @@ REM the model definition below. If OpenCode later removes this variable, the
 REM model limit in OPENCODE_CONFIG still advertises the correct 8,192 limit.
 set "OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX=8192"
 
-REM Thinking is OFF in the ds4 server chat template (enable_thinking=false).
-REM The generated OpenCode model metadata also declares reasoning=false.
+REM Thinking is declared OFF in the generated OpenCode model metadata
+REM (reasoning=false). SGLang runs a qwen3 reasoning parser; any
+REM reasoning_content it emits is ignored by the non-reasoning SDK contract.
 
 REM ============================================================================
 REM LONG-RUN / SLOW-LOCAL-MODEL TIMEOUTS
@@ -70,8 +75,8 @@ set "OPENCODE_CONFIG=%TEMP%\opencode-spark-config-%RANDOM%-%RANDOM%.json"
 REM ============================================================================
 REM AUTO-DETECT DIRECT DGX SPARK ENDPOINT
 REM ============================================================================
-REM   1) ${HOST_DGXSPARK}:8401  DGX Spark published port
-REM   2) 127.0.0.1:8401      localhost fallback
+REM   1) ${HOST_DGXSPARK}:8420  DGX Spark published port (sglang stack)
+REM   2) 127.0.0.1:8420      localhost fallback
 REM ============================================================================
 
 echo.
@@ -79,9 +84,9 @@ echo ===========================================================================
 echo DIRECT DGX SPARK MODE  ^(OpenCode, direct backend, no router^)
 echo =============================================================================
 echo   GPU          : DGX Spark GB10
-echo   Model        : Qwen3.8-Flash-Next 180B MoE ^(native vision^)
+echo   Model        : Qwen3.8-Flash-Next NVFP4 ^(SGLang, vision ON^)
 echo   Host         : %HOST_DGXSPARK%
-echo   Port         : 8401
+echo   Port         : 8420
 echo   Context      : %OPENCODE_DGX_CONTEXT%
 echo   Compact at   : %OPENCODE_COMPACT_AT%
 echo   Max response : %OPENCODE_MAX_OUTPUT_TOKENS%
@@ -95,8 +100,8 @@ echo.
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference = 'SilentlyContinue';" ^
   "$candidates = @(" ^
-  "  ('http://' + $env:HOST_DGXSPARK + ':8401')," ^
-  "  'http://127.0.0.1:8401'" ^
+  "  ('http://' + $env:HOST_DGXSPARK + ':8420')," ^
+  "  'http://127.0.0.1:8420'" ^
   ");" ^
   "$selected = $null;" ^
   "foreach ($candidate in $candidates) {" ^
@@ -115,7 +120,7 @@ powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command ^
   "if (-not $selected) {" ^
   "  Write-Host '';" ^
   "  Write-Host 'ERROR: No reachable DGX Spark Flash-Next endpoint was found.' -ForegroundColor Red;" ^
-  "  Write-Host ('Checked ' + $env:HOST_DGXSPARK + ':8401 and localhost:8401.') -ForegroundColor Yellow;" ^
+  "  Write-Host ('Checked ' + $env:HOST_DGXSPARK + ':8420 and localhost:8420.') -ForegroundColor Yellow;" ^
   "  exit 2;" ^
   "};" ^
   "[System.IO.File]::WriteAllText($env:ENDPOINT_FILE, $selected);"
@@ -230,7 +235,7 @@ REM
 REM Important metadata:
 REM   - context/output limits are explicit
 REM   - tool_call=true keeps coding tools available
-REM   - reasoning=false matches ds4 thinking-off mode
+REM   - reasoning=false declares thinking off (SGLang qwen3 reasoning parser)
 REM   - modalities explicitly enable text + image input
 REM   - small_model is pinned to the same local model (no cloud fallback)
 REM   - compaction reserve 16,384 -> effective 245,760-token threshold
@@ -268,11 +273,12 @@ powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command ^
   "  '$schema' = 'https://opencode.ai/config.json';" ^
   "  model = $fullModel;" ^
   "  small_model = $fullModel;" ^
+  "  enabled_providers = @($providerId);" ^
   "  compaction = [ordered]@{ auto = $true; prune = $false; reserved = 16384 };" ^
   "  permission = $permission;" ^
   "  provider = $providers" ^
   "};" ^
-  "$json = $config | ConvertTo-Json -Depth 12;" ^
+  "$json = $config | ConvertTo-Json -Depth 12 -Compress;" ^
   "[System.IO.File]::WriteAllText($env:OPENCODE_CONFIG, $json, [System.Text.UTF8Encoding]::new($false));"
 
 set "CONFIG_EXIT=%ERRORLEVEL%"
@@ -281,6 +287,18 @@ if not "%CONFIG_EXIT%"=="0" (
     echo ERROR: Failed to generate temporary OpenCode configuration.
     if exist "%OPENCODE_CONFIG%" del /q "%OPENCODE_CONFIG%" >nul 2>&1
     exit /b %CONFIG_EXIT%
+)
+
+REM Apply the same generated JSON as an inline runtime override. OpenCode loads
+REM OPENCODE_CONFIG_CONTENT after project config, preventing a project-local
+REM opencode.json from changing this launcher's provider/model/limits/permissions.
+set /p "OPENCODE_CONFIG_CONTENT="<"%OPENCODE_CONFIG%"
+
+if not defined OPENCODE_CONFIG_CONTENT (
+    echo.
+    echo ERROR: Generated OpenCode runtime configuration was empty.
+    if exist "%OPENCODE_CONFIG%" del /q "%OPENCODE_CONFIG%" >nul 2>&1
+    exit /b 7
 )
 
 REM ============================================================================
@@ -352,14 +370,15 @@ echo   Direct URL:     %QWEN_SPARK_URL%
 echo   Total context:  %OPENCODE_DGX_CONTEXT% tokens
 echo   Compact window: %OPENCODE_COMPACT_AT% tokens ^(16,384 reserve^)
 echo   Max response:   %OPENCODE_MAX_OUTPUT_TOKENS% tokens
-echo   Thinking:       OFF ^(ds4 enforced^)
+echo   Thinking:       OFF ^(declared in metadata^; SGLang qwen3 reasoning parser^)
 echo   Image input:    NATIVE VISION ^(text + image declared^)
 echo   API timeout:    60 hours/request
 echo   Header timeout: OFF ^(slow Spark prefill allowed^)
 echo   Stream idle:    20 hours between chunks
 echo   Bash timeout:   100 minutes default
 echo   Permissions:    AUTO / unrestricted unless explicitly denied elsewhere
-echo   Config:         %OPENCODE_CONFIG%
+echo   Config file:    %OPENCODE_CONFIG%
+echo   Runtime config: INLINE OVERRIDE ACTIVE
 echo   CLI:            %REAL_OPENCODE%
 echo =============================================================================
 echo.
