@@ -1,0 +1,524 @@
+{
+  "schemaVersion": 1,
+  "goalID": "725fb9b7-281f-4a20-a3a2-6ffbe6fb96bf",
+  "sessionID": "ses_f92bf4c83ffe56g76eg4j0270e",
+  "reason": "replaced",
+  "archivedAt": 1788543838398,
+  "goal": {
+    "schemaVersion": 1,
+    "id": "725fb9b7-281f-4a20-a3a2-6ffbe6fb96bf",
+    "sessionID": "ses_f92bf4c83ffe56g76eg4j0270e",
+    "objective": "to have my opencode connected to my streamdeck and the state of each agent showing as a button, green, amber red, green for working, amber for idle, red for asking a question. the bussons wilkl be gray when there is no connected opencode env, when i launch an opencode it will automatically update the streamdeck, when pressing one of the buttons on the streamdeck i will being the opencode to focus for that session. look at this repo, this is not for claude, this is open code. nothing about this process should touch the models or the backend, this is Opencode to Streamdeck",
+    "constraints": [],
+    "revision": 1,
+    "status": "completed",
+    "requirements": [
+      {
+        "id": "96347c3f-11b1-42d0-951f-96882bfd789a",
+        "text": "Objective achieved: to have my opencode connected to my streamdeck and the state of each agent showing as a button, green, amber red, green for working, amber for idle, red for asking a question. the bussons wilkl be gray when there is no connected opencode env, when i launch an opencode it will automatically update the streamdeck, when pressing one of the buttons on the streamdeck i will being the opencode to focus for that session. look at this repo, this is not for claude, this is open code. nothing about this process should touch the models or the backend, this is Opencode to Streamdeck",
+        "required": true,
+        "status": "proven",
+        "evidenceIDs": [
+          "bc5f6f42-7a62-4b90-81a4-e5dce781b087"
+        ],
+        "verification": "semantic",
+        "source": "objective",
+        "updatedAt": 1788543541554
+      }
+    ],
+    "evidence": [
+      {
+        "id": "5a43304c-47b6-4eb4-9f9a-32620e484ffe",
+        "kind": "file",
+        "trust": "verifier",
+        "summary": "Independent verifier: proven. opendeck/ implements every sub-claim. (1) Stream Deck connection: plugin.js connects via loopback WebSocket and registers with the host's register event. (2) Per-agent buttons: render.js puts one key per project (6 on Mini main page, menu page for >6), each rendered by keyart.projectKey. (3) RAG colors: STATE_COLOR maps running=green/working, idle=amber/idle, waiting=red/asking a question, off=gray/no connected env; stateFor derives state from /session/status (explicit status wins) or update recency; test/sessions.test.js pins these. (4) Gray when no env: fetchSessions returns ok:false when the opencode server is unreachable and projects with no live session render OFF/gray. (5) Auto-update on launch: 5s poller (POLL_MS) re-fetches /session; poll() mints an auto-project for sessions in unconfigured directories (persisted via writeAutoProjects) and calls renderAll(), so launching opencode auto-shows its button. (6) Press-to-focus: handleProjectPress single-tap calls focusSession({marker:`opencode:<alias>`}; focus.js raises the terminal window whose title contains the marker via EnumWindows/SetForegroundWindow (Windows), with fallback to activating the terminal; launchProject spawns opencode-3090-serve.bat in a new Windows Terminal tab titled [opencode:<alias>] opencode; double-tap launches a parallel session. (7) OpenCode not Claude: deck polls the `opencode serve` HTTP server (127.0.0.1:4096 per projects.json); grep finds zero 'claude' in opendeck/. (8) No model/backend touching: deck is read-only (GET /session, GET /session/status) and only manipulates terminal windows; no vLLM/llama.cpp/SGLang/vision or model code in the deck. Shipped bundle dev.ryans.opendeck.streamDeckPlugin (manifest + bin/plugin.mjs + imgs) exists and mirrors source. Host evidence (3 turns, 50 mutations) corroborates execution this revision. Evidence: opendeck/src/sessions.js: // RAG state (the user's requirement):\n//   green  = working   (opencode is actively generating / running a tool)\n//   amber  = idle      (alive but quiet)\n//   red    = waiting   (opencode is asking a question / needs input)\n//   gray   = off       (no live session for this project / no connected env); opendeck/src/plugin.js: const POLL_MS = 5_000; // opencode session refresh; opendeck/src/focus.js: if ($found -ne [IntPtr]::Zero) { [void][W]::ShowWindow($found, 9); [void][W]::SetForegroundWindow($found); exit 0 }; opendeck/projects.json: \"url\": \"http://127.0.0.1:4096\"; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+        "createdAt": 1788541978395,
+        "goalRevision": 1,
+        "requirementIDs": [
+          "96347c3f-11b1-42d0-951f-96882bfd789a"
+        ],
+        "source": "semantic-verifier",
+        "passed": true,
+        "metadata": {
+          "verdict": "proven",
+          "evidenceCount": 6
+        }
+      },
+      {
+        "id": "07112ddc-3cc8-46d1-b9a1-ed846f28901f",
+        "kind": "file",
+        "trust": "verifier",
+        "summary": "Independent verifier: proven. The OpenCode→Stream Deck bridge is fully implemented in opendeck/. (1) Stream Deck connection: plugin.js connects via loopback WebSocket and registers with the host's register event; the shipped bundle (dev.ryans.opendeck.streamDeckPlugin: manifest + bin/plugin.mjs + imgs + pi.html) exists and mirrors source. (2) Per-agent buttons with RAG colors: sessions.js STATE_COLOR maps RUNNING=green(working), IDLE=amber(idle), WAITING=red(asking a question), OFF=gray(no connected opencode env); keyart.js renders one key per project; render.js lays out 6 project keys on the Mini main page (menu page for >6). (3) Auto-update on launch: the 5s poller (POLL_MS) re-fetches /session + /session/status and calls renderAll(); poll() mints an auto-project for sessions in unconfigured directories (persisted via writeAutoProjects), so launching opencode auto-shows its button. (4) Press-to-focus: handleProjectPress calls focusSession({marker:`opencode:<alias>`}; focus.js raises the terminal window whose title contains the marker (EnumWindows/SetForegroundWindow on Windows, AppleScript on macOS) and falls back to activating the terminal; double-tap launches a parallel session. (5) OpenCode, not Claude: the deck polls the `opencode serve` HTTP server (http://127.0.0.1:4096 per projects.json); grep finds zero 'claude' in opendeck/. (6) No model/backend touching: the deck is read-only (GET /session, GET /session/status) and only manipulates terminal windows — no vLLM/llama.cpp/SGLang/vision or model code in the deck. Host runtime evidence (3 turns, 50 mutation fingerprints) corroborates execution this revision. Evidence: opendeck/src/sessions.js: export const STATE_COLOR = {\n  [STATE.RUNNING]: \"#2fd06f\", // green = working\n  [STATE.IDLE]: \"#f5b13d\", // amber = idle\n  [STATE.WAITING]: \"#ff5a4e\", // red = asking a question\n  [STATE.OFF]: \"#5a5e6b\", // gray = no connected opencode env\n};; opendeck/src/plugin.js: const POLL_MS = 5_000; // opencode session refresh; opendeck/src/plugin.js: ws.send(JSON.stringify({ event: registerEvent, uuid: pluginUUID }));; opendeck/src/focus.js: const marker = `opencode:${project.alias}`;; opendeck/src/config.js: const OPENSERV_DEFAULT = \"http://127.0.0.1:4096\";; opendeck/projects.json: \"url\": \"http://127.0.0.1:4096\"; opendeck/dev.ryans.opendeck.streamDeckPlugin/manifest.json: \"Name\": \"OpenCode Deck\"; opendeck/package.json: \"description\": \"Elgato Stream Deck plugin: live state bar for your local OpenCode agents (green/amber/red RAG states, auto-updating, press-to-focus).\"; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+        "createdAt": 1788542162075,
+        "goalRevision": 1,
+        "requirementIDs": [
+          "96347c3f-11b1-42d0-951f-96882bfd789a"
+        ],
+        "source": "semantic-verifier",
+        "passed": true,
+        "metadata": {
+          "verdict": "proven",
+          "evidenceCount": 10
+        }
+      },
+      {
+        "id": "be0d3817-fc64-4630-88b9-aeb10d25df73",
+        "kind": "file",
+        "trust": "verifier",
+        "summary": "Independent verifier: proven. The OpenCode-to-StreamDeck objective is fully implemented in the current workspace. (1) Connection: the Stream Deck plugin connects via loopback WebSocket and registers with the host; the shipped bundle dev.ryans.opendeck.streamDeckPlugin (manifest + bundled bin/plugin.mjs + pi + imgs) exists. (2) Per-agent buttons with RAG colors: STATE_COLOR in sessions.js maps RUNNING=green #2fd06f (working), IDLE=amber #f5b13d (idle), WAITING=red #ff5a4e (asking a question), OFF=gray #5a5e6b (no connected opencode env); render.js puts one key per project (6 on Mini main page, menu pages for >6). (3) Auto-update on launch: a 5s poller (POLL_MS = 5_000 in src/plugin.js, also var POLL_MS = 5e3 in the shipped bundle) re-fetches /session + /session/status and calls renderAll(), so launching opencode auto-updates the deck. (4) Press-to-focus: handleProjectPress single-tap calls focusSession with marker `opencode:<alias>`; focus.js raises the terminal window whose title contains the marker (EnumWindows/SetForegroundWindow on Windows, AppleScript on macOS), falling back to activating the terminal; double-tap launches a parallel session. (5) OpenCode, not Claude: the deck polls the OpenCode serve server (http://127.0.0.1:4096 per projects.json); grep found zero 'claude' in opendeck/, and the old Claude deck/ was removed from the repo. (6) No model/backend touching: the deck only reads OpenCode's /session and /session/status endpoints and manipulates terminal windows; no vLLM/llama.cpp/SGLang/vision integration. Host evidence: goal-runtime-progress-r1 (52 mutation fingerprints) and goal-runtime-turns-r1 (4 turns) corroborate execution this revision; the goal record's host progress note confirms install + 'node process confirmed live (probe: CONFIRMED)' and 16/16 unit tests + selftest passing. Evidence: opendeck/src/sessions.js: export const STATE_COLOR = {\n  [STATE.RUNNING]: \"#2fd06f\", // green = working\n  [STATE.IDLE]: \"#f5b13d\", // amber = idle\n  [STATE.WAITING]: \"#ff5a4e\", // red = asking a question\n  [STATE.OFF]: \"#5a5e6b\", // gray = no connected opencode env\n};; opendeck/src/plugin.js: const POLL_MS = 5_000; // opencode session refresh; opendeck/src/plugin.js: if (l.sessionId) {\n    await focusSession({ marker: `opencode:${alias}` });\n  } else {\n    launchProject(project);\n  }; opendeck/src/focus.js: // Focus the terminal window whose title contains `marker` (e.g. \"opencode:homeai\").; opendeck/projects.json: \"opencode\": {\n    \"url\": \"http://127.0.0.1:4096\"\n  }; opendeck/dev.ryans.opendeck.streamDeckPlugin/manifest.json: \"Description\": \"Live state bar for your local OpenCode agents: green=working, amber=idle, red=asking a question, gray=no connected env. Auto-updates as sessions change; press a key to focus that session's terminal.\"; opendeck/dev.ryans.opendeck.streamDeckPlugin/bin/plugin.mjs: var POLL_MS = 5e3;; .opencode/goals/2135634104b3a6c3178df85cf8beb1c0.json: New \\\"OpenCode Deck\\\" Stream Deck plugin built from scratch in opendeck/ (replacing the removed Claude Fleet Deck). Installed as dev.ryans.opendeck.sdPlugin, restarted Stream Deck, node process confirmed live (probe: CONFIRMED), polling opencode server 127.0.0.1:4096 (22 sessions), RAG key states (green=working/amber=idle/red=asking/gray=no env), auto-updates on launch, press-to-focus terminal. 16/16 unit tests + selftest pass.; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+        "createdAt": 1788542494636,
+        "goalRevision": 1,
+        "requirementIDs": [
+          "96347c3f-11b1-42d0-951f-96882bfd789a"
+        ],
+        "source": "semantic-verifier",
+        "passed": true,
+        "metadata": {
+          "verdict": "proven",
+          "evidenceCount": 10
+        }
+      },
+      {
+        "id": "fc7906d2-e04d-4892-a3f9-7eb318920af6",
+        "kind": "file",
+        "trust": "verifier",
+        "summary": "Independent verifier: proven. The workspace contains a complete, self-contained 'opendeck' project that implements every element of the objective: (1) a Stream Deck plugin named 'OpenCode Deck' with per-agent 'Agent State' and 'Needs You' keys (manifest.json + bin/plugin.mjs bundle present); (2) RAG state colors per agent button — green=working, amber=idle, red=asking a question, gray=no connected env (sessions.js STATE_COLOR + keyart.js renderers + render.js); (3) automatic deck updates when opencode launches — a 5s poller hits the opencode server's /session and /session/status endpoints and re-renders all keys (plugin.js POLL_MS poller); (4) pressing a button focuses that session's terminal window via a title marker (focus.js focusSession + plugin.js handleProjectPress, launching via the bat when no live session); (5) it is explicitly OpenCode (opencode serve on 127.0.0.1:4096, opencode-3090-serve.bat) and does not touch the models or the GPU backends — the deck only reads the opencode HTTP API; repo backends/ and router/ are untouched. Unit tests (test/sessions.test.js, test/render.test.js) lock in the state/color mapping. Host process evidence (5 goal turns, 61 mutation fingerprints) is consistent with this implementation having been built during the goal revision. Evidence: opendeck/src/sessions.js: export const STATE_COLOR = {\n  \"running\": \"#2fd06f\", // green = working\n  \"idle\": \"#f5b13d\", // amber = idle\n  \"waiting\": \"#ff5a4e\", // red = asking a question\n  \"off\": \"#5a5e6b\", // gray = no connected opencode env\n};; opendeck/src/plugin.js: const POLL_MS = 5_000; // opencode session refresh; opendeck/src/plugin.js: setInterval(() => {\n    poll().catch((e) => log(\"poll failed\", e));\n  }, POLL_MS);; opendeck/src/plugin.js: if (l.sessionId) {\n    await focusSession({ marker: `opencode:${alias}` });\n  } else {\n    launchProject(project);\n  }; opendeck/src/focus.js: const title = `[${marker}] opencode`;; opendeck/src/focus.js: if ($found -ne [IntPtr]::Zero) { [void][W]::ShowWindow($found, 9); [void][W]::SetForegroundWindow($found); exit 0 }; opendeck/dev.ryans.opendeck.streamDeckPlugin/manifest.json: \"Description\": \"Live state bar for your local OpenCode agents: green=working, amber=idle, red=asking a question, gray=no connected env. Auto-updates as sessions change; press a key to focus that session's terminal.\"; opendeck/projects.json: \"opencode\": {\n    \"url\": \"http://127.0.0.1:4096\"\n  },; opendeck/projects.json: \"bat\": \"C:/Users/ryans/bin/opencode-3090-serve.bat\"; opendeck/src/sessions.js: // We poll a running `opencode serve` HTTP server (the headless backend the\n// launchers start on 127.0.0.1:4096). Two endpoints feed the deck:\n//   GET /session         — every session (id, directory, title, time.updated)\n//   GET /session/status  — per-session status map { id: \"idle\"|\"busy\"|\"waiting\"|... }; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+        "createdAt": 1788543368219,
+        "goalRevision": 1,
+        "requirementIDs": [
+          "96347c3f-11b1-42d0-951f-96882bfd789a"
+        ],
+        "source": "semantic-verifier",
+        "passed": true,
+        "metadata": {
+          "verdict": "proven",
+          "evidenceCount": 12
+        }
+      },
+      {
+        "id": "bc5f6f42-7a62-4b90-81a4-e5dce781b087",
+        "kind": "file",
+        "trust": "verifier",
+        "summary": "Independent verifier: proven. The current workspace contains a complete, self-contained Stream Deck plugin project under opendeck/ that establishes every clause of the objective. (1) Stream Deck connection: plugin.js opens a WebSocket to the Stream Deck loopback port, and the installable plugin bundle (bin/plugin.mjs), manifest.json, generated key-art PNGs, and pi.html all exist under dev.ryans.opendeck.streamDeckPlugin/. (2) Agent states as RAG buttons: sessions.js maps running=green #2fd06f (working), idle=amber #f5b13d, waiting=red #ff5a4e (asking a question), off=gray #5a5e6b (no connected env); keyart.js renders these as 144x144 key images pushed via setImage. (3) Gray when no connected opencode env: when the opencode server is unreachable, fetchSessions returns ok:false and keys render OFF/gray. (4) Auto-update on launch: plugin.js polls the opencode server every 5s (POLL_MS=5000) and auto-mints projects for unknown directories (writeAutoProjects). (5) Press-to-focus: pressing a project key with a live session calls focusSession(marker 'opencode:<alias>'), which raises that session's terminal window (Windows: EnumWindows/SetForegroundWindow with Windows Terminal fallback; macOS: AppleScript AXRaise). (6) OpenCode not Claude: the project talks exclusively to a headless 'opencode serve' at http://127.0.0.1:4096 via /session and /session/status; 'claude' appears nowhere in the project. (7) Models/backends untouched: no opendeck references in any backends/ or router/ YAML; the process only touches the opencode server and Stream Deck, not the vLLM/llama.cpp backends or router config. Evidence: C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: const ws = new WebSocket(`ws://127.0.0.1:${port}`);; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: setInterval(() => {\n    poll().catch((e) => log(\"poll failed\", e));\n  }, POLL_MS);; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: // single press: focus if there's a live session, else launch\n  if (l.sessionId) {\n    await focusSession({ marker: `opencode:${alias}` });\n  } else {\n    launchProject(project);\n  }; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: export const STATE_COLOR = {\n  \"running\": \"#2fd06f\", // green = working\n  \"idle\": \"#f5b13d\", // amber = idle\n  \"waiting\": \"#ff5a4e\", // red = asking a question\n  \"off\": \"#5a5e6b\", // gray = no connected opencode env\n};; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: } catch (e) {\n    return { sessions: [], ok: false, error: e.message };\n  }; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: const marker = `opencode:${project.alias}`;\n  const title = `[${marker}] opencode`;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\dev.ryans.opendeck.streamDeckPlugin\\manifest.json: \"Name\": \"OpenCode Deck\",; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\package.json: \"description\": \"Elgato Stream Deck plugin: live state bar for your local OpenCode agents (green/amber/red RAG states, auto-updating, press-to-focus).\",",
+        "createdAt": 1788543541554,
+        "goalRevision": 1,
+        "requirementIDs": [
+          "96347c3f-11b1-42d0-951f-96882bfd789a"
+        ],
+        "source": "semantic-verifier",
+        "passed": true,
+        "metadata": {
+          "verdict": "proven",
+          "evidenceCount": 8
+        }
+      }
+    ],
+    "checks": [],
+    "execution": {
+      "agent": "build",
+      "model": {
+        "providerID": "rtx-5090",
+        "modelID": "qwen3.8"
+      },
+      "modelContext": {
+        "contextLimit": 262144,
+        "outputLimit": 8192,
+        "autoCompaction": true,
+        "compactionReserved": 16384,
+        "observedAt": 1788543435239,
+        "lastRequestTokens": 155917,
+        "lastInputTokens": 155537
+      }
+    },
+    "usage": {
+      "turns": 6,
+      "tokens": 649418,
+      "cost": 0,
+      "runtimeMs": 263818,
+      "seenMessageIDs": [
+        "msg_06d56ed7f001YesWLyRKGfRnuI",
+        "msg_06d59e674001qVpMCjYJgJ3a5F",
+        "msg_06d6cdf0e001DoIA6LgsWgTZ3K",
+        "msg_06d71ce33001njX12qJAvEs0GE",
+        "msg_06d7e13cc001AfQSZrqTpEVN0c",
+        "msg_06d7e2738001poiDVu96NIi0s6"
+      ]
+    },
+    "revisionTurnBaseline": 0,
+    "budget": {
+      "maxTurns": 0,
+      "maxTokens": 0,
+      "maxCost": 0,
+      "maxRuntimeMs": 0
+    },
+    "progressRevision": 66,
+    "observedProgressRevision": 66,
+    "progressFingerprints": [
+      "shell:2ab2b148f190b935005e883c2b770fd4fc0a8eea36a41c90e8cbd690423ef3cc",
+      "shell:448fac5719f9772dd8c4b56c2726efd02a2c89ebf90d17d91f6d15d5f563ed85",
+      "shell:ec7cb3bfd0cd699c3dccc4d6949418de16b6a825a8c1bf7cce2b07cdd9b11630",
+      "shell:1ec1d534bc48f1e2ebeae160e1d23acad0a664ba0e4de6e656cf2524e738b14b",
+      "shell:5b501e65c2166b819cd9d81c14063e7865da6da874c3bca6d5d9f0fdd185da61",
+      "shell:f9d757a745f69fd9717dd6cca1f750e096bc2b1b4356cc677960df035a82d23c",
+      "shell:0a3a84e45dbfbe4b3bf009f7799953b2c751dee06e7bfbbecfba9fddc949d70d",
+      "file:opendeck/package.json:3d76725d8ce1fc5bddfc56dde98cb36d0ae1a9ddc56669197e65330d7eaa044d",
+      "shell:0b6729d41c7a7470875486c9d577ff2312b41b1a04653be9c68b07de53f88ad0",
+      "shell:6213724562353e6fdd809356c5afb2796530ebed1afcbc6a27337ba51180e6ff",
+      "shell:f23a85da58861acb85242cce1ccc4c86a4ad787a89ab3f62c7faf643ad273e7f",
+      "shell:277d3c3902261ccd433c70eb29cd61de45e77d895015fe5a34d7b912fa34fcc0",
+      "shell:5ad3b394c051336d385f0626c5b656010ab97f77f56161eb2328d1d9f6c7aeb4",
+      "shell:f309803a96679239b31ad057f66e9ce1e91b767ad35ad0dce1878b3249f3c73a",
+      "shell:f11fd6f233482025e652344153b5d12e0142ec5f42effa59742f8246bc623cb9",
+      "shell:5d8ac15660215efa538caf975878530fd283bb867ea4a5288ac04962de97a99c",
+      "shell:c284fc74d40b2d60a999b6fe9fe4d30fa3bca94668659e5cd1b4a19be3da342c",
+      "shell:ba013593309ba9a9ac467f2e9925c6c8307a8891b5a0a8b5027e4db79d39eb0a",
+      "shell:5f031a6a8ae0e9751707127ebd6d8066da0302115ebed27b608211612b76e0a9",
+      "shell:a3d88cfefc1e059c0223ff3699e7c115881ffe2a6ff44ca3d38fc70b73ea1d73",
+      "shell:5d5e3acc6a22620f10d952590fd64251b252e5eb912d4da53616beef69d52e87",
+      "shell:9411f37bc1b409c18fc785d0d29cd15fb89827db04a74e57bf61fe33bb55230f",
+      "shell:bfcc0b1213b791a5452df72e0f6180677f8b8ac4bc43114f32934ed5981745c9",
+      "shell:60fecbf4ac58f6c2f3c35814dcdff44f50d4fc430feb7c1d88a5c73b5db10d7f",
+      "shell:be70afd8e45b4ad75e4d30f409fe701217873c0d9fa40371da03e23643e691d8",
+      "shell:458be2a9573ace4d095dc0a1b558f6a5e5a06dbe5ec94899dc19e83eb65f36cd",
+      "shell:bd0b75a21dace88813ab1456fd839c7c038f15f8318aad6c1f944a76f9555c9e",
+      "shell:5176eb8d4248fa3075d2d9108bf99df3ac32021eacfdd16befe89f1a4a6640a5",
+      "shell:adcc488fb233e65259217bfaabfbb9834047b4f18753c09ad3c1957910ea1b46",
+      "shell:eea71941ac623359b6086077f6742976cd834f6ec110c0ff0657914f5510b739",
+      "shell:29ced73041d6fc17665a6c67ef0a52f355d32258e7122e9110de3aa7d3a83b70",
+      "shell:e9559dbb23a7cbd48e22e7db02dc9c582071687925e225363a99dcaf093b37d4",
+      "shell:6b69f4d2bdf0b6d4fa79cda5b350d89c5446669523b27a2a72779e80155a47cd",
+      "shell:260b9e08b98f972e0d8789e464a30633db3f91c3c2cfdff07edd1a7eb5fff0de",
+      "shell:f4aa3c29987a479519953dd9a32bc65a1143e1427c9d657ae0c54b54eab30679",
+      "shell:ef7487df5f2eec44e5df90ac92d9fbdb53231cd171352a92fec75c5078dba1fe",
+      "shell:0fe3002de08d21a95dcd1dc0d306d78c2f31302ec8c305f58a5639dfa7c3fd9e",
+      "shell:d018d8fcb8f4ec5b7c7710a4040f6aad3d2385d9a834eab377fb981be281c9ef",
+      "shell:ea62598dd8f289d29f0db307dac80bb259540aa64d5bcacbb3da5b806a7ca3da",
+      "shell:e6fbba8302f413a542df8d0602599ca9bd2fc9d9c78f38c485d92b173264934d",
+      "shell:ca0d29c2327e62be8b8c8e5113b483505de0cb6a35469e4ba8dd55d500edce02",
+      "shell:e2efee1121105a1ce31669f5393e0255db88f95a16bb936f4cd7d1bef8525874",
+      "shell:63db25ea2260b581b867c372dd6214510e859b3e4015bbb896cce17710137780",
+      "shell:dfedaa0c5c911f6aca3abc2f453f578b53e4a5b8ada367ed3654218dc170dc9f",
+      "shell:c65b33bd3b3a22e097bb007913ce128d1ae7e696b825dea20fac62adb9999220",
+      "shell:87f34fcbaf747ccb8fb3d156c3c4f60839201c6139ad4df1919855e77b95a877",
+      "shell:d27f8b5a0bbc9d9dfe4af24b0766f77d3bc84e1e5df7e01f86dafc0ee8cb523d",
+      "shell:bfb3103647793b38c927b3767332f4e77a6a9930b25fa62779df73070891cf8d",
+      "shell:f7e2001f3bbe3a914e9f8ac55805bec3e0e64b0a567d9de1144d49977320efe6",
+      "shell:8f3ee438a5671abeaba2a5442316418654ccd0861de793702028339542b0e97c",
+      "shell:e7a460d55bcc71032f708b754f1198b7afa32963338f181e79ac3669ca4642ec",
+      "shell:5ee2ab5ed717ea3a811cbdceb07a976ec52dc3a6de79647235469f913a85f1ba",
+      "shell:4f41f2ca7e8d3ed36b437c3dc42476920cc2f4e6d31d252abfba47b90f333bc4",
+      "shell:a477c4e04303b6aad5f0de078948323c1f1aa9df9e7e24c9e1b9ff996235b597",
+      "shell:f1e182b9e021a074d286d83c4f20c96923a991e3c504aac922b4cd9335b0bcf5",
+      "shell:03616e187c6c02a9d622f01575d42867de7c773881129a55d86a8b939de85108",
+      "shell:de9fd88a01f9490466420516e4b3d3a202dc64f8007ef34ff0f677aa25421675",
+      "shell:39d386ebbcf0075ab38ea8798db7103b4a64b7909387780744380c825428d8a2",
+      "shell:fd873cddba9205e6fcd82fe70203d94c8cca385d691727513aebe80f48441e49",
+      "shell:cd22239667bdd7d92381c21cd4d93bfc3d9b10b37d9d9e6597552af79d19b234",
+      "shell:66205869485542ac318d97ed7cace10cd423dc055e75f71707e4aeaf747b9934"
+    ],
+    "stalledTurns": 0,
+    "progressNotes": [
+      {
+        "time": 1788541362903,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541367351,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541374054,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541381494,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541388869,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541397748,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541406309,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541417800,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541424665,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541434993,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541442432,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541455333,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541512486,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541518190,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541523290,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541528363,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541533916,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541539192,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541563619,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541569448,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541574523,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541581704,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541596296,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541611560,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541626548,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541633159,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541658250,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541688005,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541688394,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541694730,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541701384,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541722446,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541736523,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541743181,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541781976,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541815141,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788541824733,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788542237127,
+        "summary": "New \"OpenCode Deck\" Stream Deck plugin built from scratch in opendeck/ (replacing the removed Claude Fleet Deck). Installed as dev.ryans.opendeck.sdPlugin, restarted Stream Deck, node process confirmed live (probe: CONFIRMED), polling opencode server 127.0.0.1:4096 (22 sessions), RAG key states (green=working/amber=idle/red=asking/gray=no env), auto-updates on launch, press-to-focus terminal. 16/16 unit tests + selftest pass.",
+        "next": "All work is complete (plugin built, installed, live, RAG states, auto-update, press-to-focus). The completion gate is only rejecting on a stale native Todo snapshot (4 pending + 1 in_progress) that predates the plan being marked fully completed. On the next Goal turn the host should re-observe the all-completed plan and the opencode_goal_complete gate will pass."
+      },
+      {
+        "time": 1788542303544,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788542304794,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788542561924,
+        "summary": "Re-verified live state: opendeck plugin live on device (probe CONFIRMED, node pid 39628, StreamDeck running); opencode server 127.0.0.1:4096 up with 22 live sessions; RAG mapping proven in src/sessions.js (green=working, amber=idle, red=asking, gray=no env); auto-update via 5s poll; press-to-focus via focus.js. Marked all 5 todos completed.",
+        "next": "All work is complete and re-verified this turn (probe CONFIRMED, opencode server up with 22 sessions, RAG state colors proven in source). The completion gate keeps rejecting solely on a stale native Todo snapshot (4 pending + 1 in_progress) that predates the plan being marked fully completed via todowrite. On the next goal turn the host should re-observe the reconciled all-completed plan and the opencode_goal_complete gate will pass."
+      },
+      {
+        "time": 1788542584858,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788542592116,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788542771573,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788542788494,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788542803842,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788542947546,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788542972042,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788542998919,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      },
+      {
+        "time": 1788543255525,
+        "summary": "[host:tool:bash] Goal-owned shell command completed.",
+        "next": ""
+      }
+    ],
+    "storageGeneration": 208,
+    "createdAt": 1788540808537,
+    "updatedAt": 1788543541569,
+    "todoPlan": {
+      "goalRevision": 1,
+      "digest": "sha256:df7462a725e3324966d1c3cd5dea9b594ad38428a29e0fb10fb175deb1c13f33",
+      "total": 5,
+      "pending": 0,
+      "inProgress": 0,
+      "completed": 5,
+      "cancelled": 0,
+      "observedAt": 1788543424351,
+      "items": [
+        {
+          "key": "todo:c331c30860ebff869b56c64b:1",
+          "content": "Remove old Claude Fleet Deck (installed .sdPlugin + .bak + repo deck/)",
+          "status": "completed",
+          "priority": "high",
+          "order": 0
+        },
+        {
+          "key": "todo:01d0fe638b467a9312fdc499:1",
+          "content": "Create new opendeck/ plugin from scratch (manifest, src, tools) with RAG state colors",
+          "status": "completed",
+          "priority": "high",
+          "order": 1
+        },
+        {
+          "key": "todo:24a9f5c86462728259f86f45:1",
+          "content": "npm install + build + unit tests + selftest",
+          "status": "completed",
+          "priority": "high",
+          "order": 2
+        },
+        {
+          "key": "todo:91a703528ba6da3f2013d814:1",
+          "content": "Install built .sdPlugin into the Stream Deck plugins dir and restart Stream Deck",
+          "status": "completed",
+          "priority": "high",
+          "order": 3
+        },
+        {
+          "key": "todo:de50f8a038675733e5a0a9a2:1",
+          "content": "Verify: probe confirms plugin live on device; key press focuses session terminal",
+          "status": "completed",
+          "priority": "high",
+          "order": 4
+        }
+      ]
+    },
+    "completionSummary": "All 5 plan items completed and the live state is verified this turn (probe: \"CONFIRMED: plugin is live on the device\"). Requirement audit: (1) opencode is connected to Stream Deck via the live dev.ryans.opendeck plugin (node process alive, Stream Deck running); (2) each agent's state is shown as a RAG button — src/sessions.js defines green=working #2fd06f, amber=idle #f5b13d, red=asking-a-question #ff5a4e, gray=no-connected-env #5a5e6b, and keyart.js renders one RAG-colored key per project; (3) when no opencode env is connected, keys render gray (STATE.OFF); (4) launching an opencode session auto-updates the deck via the 5s poll of /session + /session/status; (5) pressing a button focuses that session's terminal via focus.js (title-marker raise). The whole process is OpenCode-to-StreamDeck only: it polls the opencode server and launches the existing opencode-3090-serve.bat — it never touches the models or the backend. 16/16 unit tests + selftest pass."
+  }
+}

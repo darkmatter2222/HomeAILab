@@ -1,0 +1,2 @@
+[console_scripts]
+ocdeck = ocdeck.__main__:main

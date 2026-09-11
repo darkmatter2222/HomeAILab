@@ -1,0 +1,549 @@
+{
+  "schemaVersion": 1,
+  "id": "7e4b1809-6da0-43f2-afaa-488ac2e98bad",
+  "sessionID": "ses_f92bf4c83ffe56g76eg4j0270e",
+  "objective": "a few things i noticed, when i launch a new open code fromt he terminal it does not show up.   when i click a button to start an open code it gets an error. and i only have one open code running (you) and i see 3 buttons lit up, there should only be one reflecting your state.  when i press a button i get this error [error 2147942402 (0x80070002) when launching `\" & C:\\Users\\ryans\\bin\\opencode-3090-serve.bat\"']\nThe system cannot find the file specified.  and when i press the button they only seem to rotate state they are not reflecting real time state.     so while you haVE THE streamdec sorta working, document how you got that working  but noiw we need to link to opencode real time state 1:1 per agent up to 6 agents",
+  "constraints": [],
+  "revision": 1,
+  "status": "blocked",
+  "requirements": [
+    {
+      "id": "36eaff7d-ed59-44a9-be91-96735656bbad",
+      "text": "Objective achieved: a few things i noticed, when i launch a new open code fromt he terminal it does not show up.   when i click a button to start an open code it gets an error. and i only have one open code running (you) and i see 3 buttons lit up, there should only be one reflecting your state.  when i press a button i get this error [error 2147942402 (0x80070002) when launching `\" & C:\\Users\\ryans\\bin\\opencode-3090-serve.bat\"']\nThe system cannot find the file specified.  and when i press the button they only seem to rotate state they are not reflecting real time state.     so while you haVE THE streamdec sorta working, document how you got that working  but noiw we need to link to opencode real time state 1:1 per agent up to 6 agents",
+      "required": true,
+      "status": "proven",
+      "evidenceIDs": [
+        "d0827087-9d03-4e08-a920-6cd9e7038790"
+      ],
+      "verification": "semantic",
+      "source": "objective",
+      "updatedAt": 1788550699964
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ece34903-4f07-4c61-b950-c3f3295eea9f",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. The single compound objective is established by current workspace evidence in opendeck/ (the OpenCode→Stream Deck plugin). Each sub-ask is directly backed: (1) terminal-launched OpenCode sessions 'did not show up' because the serve HTTP API doesn't list TUI sessions — fixed by reading OpenCode's global SQLite store as the source of truth (sessions.js readDbSessions/collectSessions). (2) The launch error 2147942402 (0x80070002) 'The system cannot find the file specified' is fixed by the cmd /k launch form in focus.js. (3) '3 buttons lit up' for one running agent is fixed by agentStates() collapsing sessions 1:1 per working directory (most-recent session wins). (4) 'rotate state / not real time' is fixed by the 5s poller driving real-time RAG state from explicit /session/status or update recency. (5) 'document how you got that working' is satisfied by opendeck/README.md, which documents the two read-only sources, the plugin wiring, and the launch-error fix. (6) 'link to opencode real time state 1:1 per agent up to 6 agents' is established by MAIN_PER_PAGE = 6 (Mini 6-key capacity) and the 1:1 agentStates mapping, with a unit test locking the 1:1-per-directory behavior. Evidence: opendeck/src/sessions.js: source of truth for TUI sessions (e.g. a terminal `opencode` launch),; opendeck/src/focus.js: named ` & C:\\...\\opencode-3090-serve.bat` -> 0x80070002); `cmd /k`; opendeck/src/sessions.js: 1:1 per agent: one button per working directory. For each directory show; opendeck/src/plugin.js: const POLL_MS = 5_000; // opencode session refresh; opendeck/README.md: The deck merges two sources of truth, then collapses them **1:1 per agent**; opendeck/README.md: One key per agent (working directory), up to 6 (the Mini's capacity). The state is; opendeck/src/render.js: const MAIN_PER_PAGE = 6;; opendeck/test/sessions.test.js: test(\"agentStates: 1:1 per agent (directory) using the most recent session\", () => {",
+      "createdAt": 1788545359740,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 8
+      }
+    },
+    {
+      "id": "c2e2c104-505a-4db9-956b-e65c423ab21a",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. Every sub-ask of the compound objective is established by current workspace evidence in the opendeck project. (1) Terminal-launched OpenCode sessions 'did not show up' because the serve HTTP API does not list TUI sessions; fixed by readDbSessions() reading OpenCode's global SQLite store as the source of truth. (2) The launch error 2147942402 (0x80070002) 'The system cannot find the file specified' is fixed by the cmd /k launch form in focus.js, which keeps the whole command as one quoted argument. (3) '3 buttons lit up' for one running agent is fixed by agentStates() collapsing sessions 1:1 per working directory (most-recent session wins), so one running agent shows exactly one lit key; a unit test pins this. (4) 'Buttons only rotate state / not real time' is fixed by the 5s poller (POLL_MS = 5_000) in plugin.js driving poll() -> collectSessions -> agentStates -> renderAll with RAG state from explicit /session/status or update recency. (5) 'document how you got that working' is satisfied by opendeck/README.md, which documents the two read-only sources, the plugin process wiring, and the launch-error fix. (6) 'link to opencode real time state 1:1 per agent up to 6 agents' is established by MAIN_PER_PAGE = 6 (Mini capacity) in render.js plus the 1:1 agentStates mapping, with the README stating one key per agent up to 6. The shipped bundle dev.ryans.opendeck.streamDeckPlugin (bin/plugin.mjs) mirrors these fixes. Host runtime evidence (3 turns, 21 mutation fingerprints) corroborates execution this revision. Evidence: C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: // source of truth for TUI sessions (e.g. a terminal `opencode` launch),; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: // 1:1 per agent: one button per working directory. For each directory show; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: // named ` & C:\\...\\opencode-3090-serve.bat` -> 0x80070002); `cmd /k`; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: const POLL_MS = 5_000; // opencode session refresh; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\render.js: const MAIN_PER_PAGE = 6;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: One key per agent (working directory), up to 6 (the Mini's capacity). The state is; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: The deck merges two sources of truth, then collapses them **1:1 per agent**:; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\test\\sessions.test.js: test(\"agentStates: 1:1 per agent (directory) using the most recent session\", () => {; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+      "createdAt": 1788546137652,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 10
+      }
+    },
+    {
+      "id": "c5643544-2e8b-4539-9f76-f8542118699e",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. Every clause of the compound objective is directly established by current workspace evidence in opendeck/. (1) 'Launch from terminal does not show up': the serve HTTP API does not list TUI sessions; fixed by readDbSessions() reading OpenCode's global SQLite store as the source of truth (sessions.js), documented in the README. (2) Launch error 2147942402 (0x80070002) 'The system cannot find the file specified' is fixed by the cmd /k launch form in focus.js and explicitly documented in the README, which names the exact error. (3) '3 buttons lit for one running agent': agentStates() collapses sessions 1:1 per working directory (most-recent session wins), so one running agent shows exactly one lit key; a unit test pins this. (4) 'buttons only seem to rotate state, not real time': the 5s poller (POLL_MS = 5_000) in plugin.js drives poll() -> collectSessions() -> agentStates() -> renderAll(), with state from explicit /session/status or update recency, i.e. real-time not rotation. (5) 'document how you got that working' is satisfied by opendeck/README.md, which documents the two read-only sources, the plugin process wiring, and the launch-error fix. (6) 'link opencode real-time state 1:1 per agent up to 6 agents' is established by MAIN_PER_PAGE = 6 (Mini capacity) in render.js plus the 1:1 agentStates mapping, and the shipped bundle dev.ryans.opendeck.streamDeckPlugin mirrors the source. Host runtime evidence (3 turns, 21 mutation fingerprints) corroborates execution this revision. Evidence: C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: One key per agent (working directory), up to 6 (the Mini's capacity). The state is; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: that agent's **most recently active session**, not a rotation across sessions:; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: The `serve` HTTP API does **not** list TUI; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: sessions, which is why a terminal-launched agent \"did not show up\". The plugin; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: error 2147942402 (0x80070002) \"The system cannot find the file; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: A 5-second poller (`POLL_MS = 5_000`) drives `poll()`; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: command is issued as `cmd /k \"title <marker> opencode & <bat>\"`; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: source of truth for TUI sessions (e.g. a terminal `opencode` launch),; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: // 1:1 per agent: one button per working directory. For each directory show; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: const POLL_MS = 5_000; // opencode session refresh; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: // 1:1 per agent: one button per working directory, showing that agent's; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\render.js: const MAIN_PER_PAGE = 6;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: const cmdLine = `title ${marker} opencode & ${bat}`;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: // named ` & C:\\...\\opencode-3090-serve.bat` -> 0x80070002); `cmd /k`; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\test\\sessions.test.js: test(\"agentStates: 1:1 per agent (directory) using the most recent session\", () => {; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+      "createdAt": 1788547238725,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 17
+      }
+    },
+    {
+      "id": "a006646c-e578-47e2-a3ae-f7a3091cc158",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. The opendeck/ project (a Stream Deck plugin) implements every part of the objective in current files: (1) terminal-launched OpenCode sessions now show up because readDbSessions() reads OpenCode's global SQLite store (sessions.js:113-151), which the serve HTTP API does not list; (2) the 2147942402 (0x80070002) 'system cannot find the file' launch error is fixed by issuing the launch as a single quoted `cmd /k` argument instead of the mangled PowerShell -Command form (focus.js:15-41, comment cites the exact error); (3) one running agent lights exactly one key because agentStates() collapses to the most recently active session per directory — 1:1 per agent (sessions.js:189-207); (4) state is real-time, not rotating, via a 5-second poller (plugin.js POLL_MS=5_000) that merges DB sessions with live serve /session + /session/status (explicit busy/waiting/idle, recency fallback); (5) the Mini's 6-key capacity is enforced (render.js MAIN_PER_PAGE=6, menu page handles >6 projects); (6) opendeck/README.md documents how the Stream Deck plugin got working (RAG state table, two read-only sources, launch/focus, build/deploy/verify). The deployed bundle bin/plugin.mjs contains the same collectSessions/agentStates/MAIN_PER_PAGE=6 logic, and 19 unit tests (13 in sessions.test.js + 6 in render.test.js) cover these behaviors. Evidence: opendeck/src/sessions.js: // 1:1 per agent: one button per working directory. For each directory show; opendeck/src/sessions.js: // source of truth for TUI sessions (e.g. a terminal `opencode` launch),; opendeck/src/sessions.js: const SERVE_PORT_FALLBACKS = [4096, 4202];; opendeck/src/focus.js: // named ` & C:\\...\\opencode-3090-serve.bat` -> 0x80070002); `cmd /k`; opendeck/src/focus.js: const cmdLine = `title ${marker} opencode & ${bat}`;; opendeck/src/focus.js: [\"-w\", \"new\", \"-d\", project.path, \"cmd\", \"/k\", cmdLine],; opendeck/src/plugin.js: const POLL_MS = 5_000; // opencode session refresh; opendeck/src/render.js: const MAIN_PER_PAGE = 6;; opendeck/src/render.js: //   menu page  -> 5 project keys + 1 nav key, for when there are >6 projects; opendeck/README.md: Turns an Elgato Stream Deck (Mini, 6 keys) into a live notification bar for your; opendeck/README.md: that single record is the agent's real-time state. So one running agent shows exactly; opendeck/README.md: **one** lit key, not several.; opendeck/README.md: and produced **error 2147942402 (0x80070002) \"The system cannot find the file; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+      "createdAt": 1788547862278,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 15
+      }
+    },
+    {
+      "id": "3b49bd8d-a987-48b2-a91b-d4850a765cd3",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. Every sub-deliverable of the objective is established by current workspace evidence in the opendeck project. (1) Terminal-launched (TUI) sessions now appear: opendeck/src/sessions.js adds readDbSessions() reading OpenCode's global SQLite store (the source of truth for TUI sessions the serve API does not list), and collectSessions() merges DB + server sessions. (2) The 0x80070002 launch error is fixed: opendeck/src/focus.js launchProject() now uses wt ... cmd /k with the whole command as one quoted argument, and opendeck/README.md documents that this replaces the mangled PowerShell -Command form that produced error 2147942402 (0x80070002) 'The system cannot find the file specified.' (3) One lit key per running agent: agentStates() collapses sessions 1:1 per working directory keeping only the most recently updated session, so a single running agent lights exactly one key; tests in opendeck/test/sessions.test.js verify the 1:1 behavior. (4) Real-time state instead of rotating: opendeck/src/plugin.js runs a 5-second poller (POLL_MS = 5_000) driving collectSessions() -> agentStates() -> renderAll(); the README documents the poller. (5) Documentation of how the Stream Deck integration was made to work exists in opendeck/README.md (two read-only sources, press-to-focus/launch, build/deploy/verify). (6) Up to 6 agents: opendeck/src/render.js sets MAIN_PER_PAGE = 6 (Mini capacity) with a menu page beyond 6 projects, and the built bundle dev.ryans.opendeck.streamDeckPlugin/bin/plugin.mjs carries the same logic (MAIN_PER_PAGE = 6, POLL_MS = 5e3). Host-observed runtime evidence (6 turns, 23 mutation fingerprints) is consistent with the completed work. Evidence: opendeck/README.md: The deck merges two sources of truth, then collapses them **1:1 per agent**:; opendeck/README.md: that agent's **most recently active session**, not a rotation across sessions:; opendeck/src/sessions.js: // 1:1 per agent: one button per working directory. For each directory show; opendeck/src/sessions.js: // source of truth for TUI sessions (e.g. a terminal `opencode` launch),; opendeck/src/focus.js: // `cmd /k` sets a stable console title (the wt tab title) that; opendeck/src/render.js: const MAIN_PER_PAGE = 6;; opendeck/src/plugin.js: const POLL_MS = 5_000; // opencode session refresh; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+      "createdAt": 1788548152159,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 9
+      }
+    },
+    {
+      "id": "74576a6e-d8d8-4b74-83ec-4fc2053ddc38",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. The compound objective is fully established by current opendeck/ files. (1) Terminal-launched opencode sessions now appear: readDbSessions() in src/sessions.js reads OpenCode's global SQLite store, which the serve HTTP API does not list — this is why a terminal-launched agent 'did not show up'. (2) The 0x80070002 / 2147942402 'The system cannot find the file specified' launch error is fixed in src/focus.js by issuing the launch as `cmd /k` (whole command as one quoted argument), and the exact error is documented in the README. (3) 'I only have one opencode running but see 3 buttons lit up' is fixed by agentStates() collapsing sessions 1:1 per working directory (most-recent session wins); a unit test pins the 1:1 behavior. (4) Real-time state (not rotation) comes from the 5-second poller (POLL_MS = 5_000) in src/plugin.js driving poll() -> collectSessions() -> agentStates() -> renderAll(), so keys reflect live state. (5) 'Document how you got that working' is satisfied by opendeck/README.md, which documents the two read-only sources, the press-to-focus/launch path, the exact launch-error fix, and build/deploy/verify. (6) 'Link to opencode real-time state 1:1 per agent up to 6 agents' is established by MAIN_PER_PAGE = 6 (the Mini's 6-key capacity) in src/render.js plus the 1:1 agentStates mapping and the 5s poller that links the deck to the live opencode serve. Host runtime evidence (7 turns, 23 mutation fingerprints) corroborates that this work was executed during the revision. Evidence: opendeck/src/sessions.js: source of truth for TUI sessions (e.g. a terminal `opencode` launch),; opendeck/src/sessions.js: 1:1 per agent: one button per working directory. For each directory show; opendeck/src/focus.js: const cmdLine = `title ${marker} opencode & ${bat}`;; opendeck/src/plugin.js: const POLL_MS = 5_000; // opencode session refresh; opendeck/src/render.js: const MAIN_PER_PAGE = 6;; opendeck/README.md: One key per agent (working directory), up to 6 (the Mini's capacity). The state is; opendeck/README.md: sessions, which is why a terminal-launched agent \"did not show up\". The plugin; opendeck/README.md: and produced **error 2147942402 (0x80070002) \"The system cannot find the file; opendeck/test/sessions.test.js: test(\"agentStates: 1:1 per agent (directory) using the most recent session\", () => {; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+      "createdAt": 1788548371050,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 11
+      }
+    },
+    {
+      "id": "6932c02a-e145-415a-b1c6-e4e26aa5ca5d",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. Every sub-ask of the compound objective is established by current workspace evidence in opendeck/. (1) Terminal-launched OpenCode sessions 'did not show up' because the serve HTTP API does not list TUI sessions — fixed by readDbSessions() in src/sessions.js, which reads OpenCode's global SQLite store as the source of truth for TUI sessions (e.g. a terminal `opencode` launch). (2) The launch error 2147942402 (0x80070002) 'The system cannot find the file specified' is fixed by the cmd /k launch form in src/focus.js (whole command kept as one quoted argument), explicitly documented in README.md which names the exact error. (3) 'Only one open code running but 3 buttons lit up' is fixed by agentStates() in src/sessions.js collapsing sessions 1:1 per working directory (most-recent session wins), so a running agent lights exactly one key; a unit test in test/sessions.test.js pins the 1:1-per-directory behavior. (4) 'Buttons only rotate state, not real time' is fixed by the 5s poller (POLL_MS = 5_000) in src/plugin.js driving poll() -> collectSessions() -> agentStates() -> renderAll(), with RAG state from explicit /session/status or update recency (stateFor in sessions.js). (5) 'Document how you got that working' is satisfied by opendeck/README.md, which documents the two read-only sources, the plugin process wiring, and the launch-error fix. (6) 'Link to opencode real time state 1:1 per agent up to 6 agents' is established by MAIN_PER_PAGE = 6 (the Mini's capacity) in src/render.js plus the 1:1 agentStates mapping, and the README states one key per agent up to 6. The shipped bundle dev.ryans.opendeck.streamDeckPlugin/bin/plugin.mjs mirrors the same logic (MAIN_PER_PAGE = 6, POLL_MS = 5e3, the cmd /k launch line). Host runtime evidence (8 goal turns, 26 workspace mutation fingerprints) corroborates that this work was executed this revision. Evidence: C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: // source of truth for TUI sessions (e.g. a terminal `opencode` launch),; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: // 1:1 per agent: one button per working directory. For each directory show; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: const cmdLine = `title ${marker} opencode & ${bat}`;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: const POLL_MS = 5_000; // opencode session refresh; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\render.js: const MAIN_PER_PAGE = 6;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: One key per agent (working directory), up to 6 (the Mini's capacity). The state is; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: and produced **error 2147942402 (0x80070002) \"The system cannot find the file; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\test\\sessions.test.js: test(\"agentStates: 1:1 per agent (directory) using the most recent session\", () => {; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\dev.ryans.opendeck.streamDeckPlugin\\bin\\plugin.mjs: var MAIN_PER_PAGE = 6;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\dev.ryans.opendeck.streamDeckPlugin\\bin\\plugin.mjs: var POLL_MS = 5e3;; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+      "createdAt": 1788549340550,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 12
+      }
+    },
+    {
+      "id": "2701cd9a-c383-4637-9a91-660303082ab9",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. The compound objective is fully established by current workspace evidence in opendeck/. (1) Terminal-launched OpenCode sessions 'did not show up' because the serve HTTP API does not list TUI sessions — fixed by readDbSessions() reading OpenCode's global SQLite store as the source of truth (sessions.js), merged by collectSessions(). (2) The launch error 2147942402 (0x80070002) 'The system cannot find the file specified' is fixed in focus.js: launchProject() issues `cmd /k` with the whole command as one quoted argument, replacing the mangled PowerShell -Command form; the README documents the exact error. (3) '3 buttons lit up' for one running agent is fixed by agentStates() collapsing sessions 1:1 per working directory (most-recent session wins), pinned by a unit test. (4) 'Buttons rotate state, not real time' is fixed by the 5s poller (POLL_MS = 5_000) in plugin.js driving poll() -> collectSessions() -> agentStates() -> renderAll(), with state from explicit /session/status or update recency. (5) 'Document how you got that working' is satisfied by opendeck/README.md, which documents the two read-only sources, plugin process wiring, launch-error fix, and build/deploy/verify. (6) 'Link to opencode real time state 1:1 per agent up to 6 agents' is established by MAIN_PER_PAGE = 6 (Mini's 6-key capacity) in render.js, the 1:1 agentStates mapping, and the 5s poller; the shipped bundle (bin/plugin.mjs with POLL_MS = 5e3, MAIN_PER_PAGE = 6, cmd /k launch) mirrors the same logic. Host runtime evidence (8 goal turns, 26 mutation fingerprints) corroborates that this work was executed during the revision. Evidence: C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: source of truth for TUI sessions (e.g. a terminal `opencode` launch),; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: 1:1 per agent: one button per working directory. For each directory show; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: const SERVE_PORT_FALLBACKS = [4096, 4202];; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: named ` & C:\\...\\opencode-3090-serve.bat` -> 0x80070002); `cmd /k`; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: const cmdLine = `title ${marker} opencode & ${bat}`;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: [\"-w\", \"new\", \"-d\", project.path, \"cmd\", \"/k\", cmdLine],; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: const POLL_MS = 5_000; // opencode session refresh; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: poll().catch((e) => log(\"poll failed\", e));; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\render.js: const MAIN_PER_PAGE = 6;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: One key per agent (working directory), up to 6 (the Mini's capacity). The state is; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: that agent's **most recently active session**, not a rotation across sessions:; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: The deck merges two sources of truth, then collapses them **1:1 per agent**:; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: The `serve` HTTP API does **not** list TUI; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: sessions, which is why a terminal-launched agent \"did not show up\".; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\test\\sessions.test.js: test(\"agentStates: 1:1 per agent (directory) using the most recent session\", () => {; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\dev.ryans.opendeck.streamDeckPlugin\\bin\\plugin.mjs: var MAIN_PER_PAGE = 6;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\dev.ryans.opendeck.streamDeckPlugin\\bin\\plugin.mjs: var POLL_MS = 5e3;; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+      "createdAt": 1788549569188,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 19
+      }
+    },
+    {
+      "id": "57716c5f-de03-4d9c-9387-1af1951b32f2",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. Every sub-ask of the compound objective is directly established by current opendeck/ files. (1) Terminal-launched sessions 'did not show up' because the serve HTTP API doesn't list TUI sessions; fixed by readDbSessions() reading OpenCode's global SQLite store. (2) The launch error 2147942402 (0x80070002) 'cannot find the file' is fixed by the cmd /k launch form in focus.js, documented with the exact error in README. (3) '3 buttons lit for one running agent' is fixed by agentStates() collapsing to the most-recent session per working directory (1:1 per agent), pinned by a unit test. (4) 'Rotating state / not real-time' is fixed by the 5s poller (POLL_MS = 5_000) driving poll() -> collectSessions() -> agentStates() -> renderAll(), with state from explicit /session/status or update recency. (5) 'Document how you got that working' is satisfied by opendeck/README.md (two read-only sources, plugin wiring, launch-error fix, build/deploy/verify). (6) 'Link to opencode real-time state 1:1 per agent up to 6 agents' is established by MAIN_PER_PAGE = 6 (Mini 6-key capacity) in render.js plus the 1:1 agentStates mapping, and the shipped bundle dev.ryans.opendeck.streamDeckPlugin/bin/plugin.mjs mirrors the same logic (MAIN_PER_PAGE=6, POLL_MS=5e3, cmd /k). Host-observed runtime evidence (10 goal turns, 27 mutation fingerprints) corroborates execution this revision. Evidence: C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: // source of truth for TUI sessions (e.g. a terminal `opencode` launch),; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: // 1:1 per agent: one button per working directory. For each directory show; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: \"off\": \"#5a5e6b\", // gray = no connected opencode env; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: const cmdLine = `title ${marker} opencode & ${bat}`;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: [\"-w\", \"new\", \"-d\", project.path, \"cmd\", \"/k\", cmdLine],; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: const POLL_MS = 5_000; // opencode session refresh; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: poll().catch((e) => log(\"poll failed\", e));; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\render.js: const MAIN_PER_PAGE = 6;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: The deck merges two sources of truth, then collapses them **1:1 per agent**:; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: One key per agent (working directory), up to 6 (the Mini's capacity). The state is; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: and produced **error 2147942402 (0x80070002) \"The system cannot find the file; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\test\\sessions.test.js: test(\"agentStates: 1:1 per agent (directory) using the most recent session\", () => {; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\dev.ryans.opendeck.streamDeckPlugin\\bin\\plugin.mjs: var MAIN_PER_PAGE = 6;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\dev.ryans.opendeck.streamDeckPlugin\\bin\\plugin.mjs: var POLL_MS = 5e3;; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+      "createdAt": 1788550118867,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 16
+      }
+    },
+    {
+      "id": "598de210-4c21-46a3-9e1b-9dcb14bfaae3",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. The opendeck/ Stream Deck plugin now directly implements and documents every part of the objective. (1) Terminal-launched OpenCode sessions are discovered from the global SQLite store so they 'show up' (readDbSessions / collectSessions merge). (2) The 0x80070002 'file not found' launch error is fixed by using `cmd /k` as a single quoted argument (focus.js launchProject). (3) Buttons reflect one state per agent: agentStates() collapses to 1:1 per agent, so one running agent yields exactly one lit key. (4) State is real-time, not rotating: a 5s poller (POLL_MS=5_000) drives poll() and the breathing loop only pulses active keys. (5) README.md documents how the Stream Deck plugin works ('How it sees OpenCode', 'How the plugin process is wired', 'Press-to-focus / launch'). (6) Capacity is 6 agents: render.js MAIN_PER_PAGE=6 (the Mini's capacity). Backed by 19 unit tests and probe-deck/livecheck verification tools. Current authoritative workspace evidence (source + README + tests + tools) establishes the objective as achieved. Evidence: opendeck/src/sessions.js: // 1:1 per agent: one button per working directory. For each directory show; opendeck/src/sessions.js: // real-time state, not a rotation of states.; opendeck/src/sessions.js: // source of truth for TUI sessions (e.g. a terminal `opencode` launch),; opendeck/src/focus.js: // keeps the whole command as one quoted argument.; opendeck/src/render.js: const MAIN_PER_PAGE = 6;; opendeck/README.md: One key per agent (working directory), up to 6 (the Mini's capacity).; opendeck/README.md: The deck merges two sources of truth, then collapses them **1:1 per agent**:; opendeck/README.md: ## How the plugin process is wired; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+      "createdAt": 1788550451125,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 10
+      }
+    },
+    {
+      "id": "d0827087-9d03-4e08-a920-6cd9e7038790",
+      "kind": "file",
+      "trust": "verifier",
+      "summary": "Independent verifier: proven. All sub-asks of the compound objective are established by current workspace evidence in opendeck/. (1) 'Launched from terminal does not show up' — fixed by readDbSessions() reading OpenCode's global SQLite store, the documented source of truth for TUI sessions the serve HTTP API does not list; collectSessions() merges it with the live serve API (port fallback 4096/4202) and the 5s poller auto-mints projects for unconfigured directories. (2) The launch error 2147942402 (0x80070002) 'The system cannot find the file specified' — fixed in focus.js: launchProject() issues wt with `cmd /k \"title <marker> opencode & <bat>\"` as one quoted argument, replacing the mangled PowerShell -Command form; the README names the exact error. (3) '3 buttons lit for one running agent' — fixed by agentStates() collapsing sessions 1:1 per working directory (most-recent session wins), so one running agent shows exactly one lit key; a unit test pins this. (4) 'Buttons only seem to rotate state / not real time' — fixed by the 5s poller (POLL_MS = 5_000) driving poll() -> collectSessions() -> agentStates() -> renderAll(); state comes from explicit /session/status or update-recency inference, and the README states the key shows the agent's most recently active session, 'not a rotation across sessions'. (5) 'Document how you got that working' — opendeck/README.md documents the two read-only sources, the plugin process wiring, the launch-error fix, and build/deploy/verify. (6) 'Link opencode real time state 1:1 per agent, up to 6' — MAIN_PER_PAGE = 6 (Mini's 6-key capacity) in render.js plus the 1:1 agentStates mapping; the shipped bundle dev.ryans.opendeck.streamDeckPlugin/bin/plugin.mjs mirrors the same logic (POLL_MS = 5e3, MAIN_PER_PAGE = 6, cmd /k). Host runtime evidence (12 turns, 29 mutation fingerprints) corroborates that this work was executed during the goal revision. Evidence: C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: // source of truth for TUI sessions (e.g. a terminal `opencode` launch),; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: // 1:1 per agent: one button per working directory. For each directory show; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\sessions.js: \"running\": \"#2fd06f\", // green = working; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: named ` & C:\\...\\opencode-3090-serve.bat` -> 0x80070002); `cmd /k`; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\focus.js: [\"-w\", \"new\", \"-d\", project.path, \"cmd\", \"/k\", cmdLine],; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\plugin.js: const POLL_MS = 5_000; // opencode session refresh; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\src\\render.js: const MAIN_PER_PAGE = 6;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: The deck merges two sources of truth, then collapses them **1:1 per agent**; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\README.md: One key per agent (working directory), up to 6 (the Mini's capacity). The state is; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\test\\sessions.test.js: test(\"agentStates: 1:1 per agent (directory) using the most recent session\", () => {; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\dev.ryans.opendeck.streamDeckPlugin\\bin\\plugin.mjs: var POLL_MS = 5e3;; C:\\Users\\ryans\\source\\repos\\HomeAILab\\opendeck\\dev.ryans.opendeck.streamDeckPlugin\\manifest.json: \"Name\": \"Agent State\",; host:goal-runtime-turns-r1; host:goal-runtime-progress-r1",
+      "createdAt": 1788550699964,
+      "goalRevision": 1,
+      "requirementIDs": [
+        "36eaff7d-ed59-44a9-be91-96735656bbad"
+      ],
+      "source": "semantic-verifier",
+      "passed": true,
+      "metadata": {
+        "verdict": "proven",
+        "evidenceCount": 14
+      }
+    }
+  ],
+  "checks": [],
+  "execution": {
+    "agent": "build",
+    "model": {
+      "providerID": "rtx-5090",
+      "modelID": "qwen3.8"
+    },
+    "modelContext": {
+      "contextLimit": 262144,
+      "outputLimit": 8192,
+      "autoCompaction": true,
+      "compactionReserved": 16384,
+      "observedAt": 1788550820590,
+      "lastRequestTokens": 238894,
+      "lastInputTokens": 238638
+    }
+  },
+  "usage": {
+    "turns": 11,
+    "tokens": 2363929,
+    "cost": 0,
+    "runtimeMs": 454709,
+    "seenMessageIDs": [
+      "msg_06d8528f50018QgoIHexAvePyp",
+      "msg_06d91c77d001Nebkmq9Qcv1Jqc",
+      "msg_06dbae1b4001pDUStzp1I93Ah6",
+      "msg_06dbfc6f40019QnWZvK43UOJLQ",
+      "msg_06dc42d12001vJx509Z7bx7lko",
+      "msg_06dc89acf001sh7I7QJ1TF3Bfx",
+      "msg_06dd69985001dpHvNcNANam5bY",
+      "msg_06dde568f001Q0IfxomJyi6epK",
+      "msg_06de32bc9001EqWAgDN1Djyu3z",
+      "msg_06de7b117001m9UNbjfZMgOYXv",
+      "msg_06dec2b92001E6RutzMGf20ytn"
+    ]
+  },
+  "revisionTurnBaseline": 0,
+  "budget": {
+    "maxTurns": 0,
+    "maxTokens": 0,
+    "maxCost": 0,
+    "maxRuntimeMs": 0
+  },
+  "progressRevision": 40,
+  "observedProgressRevision": 40,
+  "progressFingerprints": [
+    "shell:166288293bc71fa2beb537cf09b2c9fbb7fffe340016c4ac06b6a5f396d43152",
+    "shell:30224617bae4c9dbc3258cbee382c01882018721a9a5329d137ba82f66329533",
+    "shell:8ea1fca0d8df6b57b4b0704a93023d9ab03800371fa94b131ea0f96e53e216a9",
+    "shell:8f78249cb8ad1dec486e25ead70186d33a6bfa0f96384b23eda5f1c2d6aba0f6",
+    "shell:34fd8055bf6b97b651accda2f7fc3a17f3950664a96d9115695163ebc3c9d844",
+    "shell:26cdbca62eaed79bf1fed123eed04ef1aace9341740a5111895ba90b3914b92e",
+    "shell:034ed0daa6e6f7893abc7b1e3fa037b9a14a9cc88a5f7538b61a6c88dadb4941",
+    "shell:81f12a77293a0797c83fa24e15f0ffc0a6de4b35755c68bc851e3d50ca4a71d0",
+    "shell:7348a6f20d529320f7185a72090b6099b2603493ae8eec23b9af789cdb27a647",
+    "shell:c7cf1918bf26ab90849525324440fcda322a64c04ea79c6ec0faea0c4da27c71",
+    "shell:5494e35509dc11f133edae8a677743f7d854e36a7e6503bc1e894e33040978c4",
+    "shell:e82061e2e13e1bbd09eae0b1edcb30a3015ee27a5c03c811a0e7d340ebddbafe",
+    "shell:303fb86b5c5f26cbf14b49971aec2b80eb7a0417b8eebbff2a47c454fb429c63",
+    "shell:45f28c0d24851038d6b3ed48912bc08f1da7c59ab97d3af3eab8080bd462e301",
+    "shell:b58a6a4ff5865feb82bab512a639e935977e7b21654752cdeff52f48413b0a67",
+    "shell:0bb5aae3a1f73e42edafa329104789fedc443f164b5d5fef3a64e2d8939d68a8",
+    "shell:e5f24c1def5c7da0f7f94604a4f0d3ba030337a1fe95273428d66742fa7b5228",
+    "shell:8ddd9d4e3f2f7eef1a03d2b70bf4b42b1af1b72b6bc4adf489f4614531efa46f",
+    "shell:441257bd47096ed94e66974baccdfb5b96b41d91ec076c993dbf515155c5508f",
+    "shell:8f11e52bcdaeefa39032c9fd9a23d3c0bb803a044f10a9f80376412ab126cf30",
+    "shell:66cd2219f909ad5b942358a099c08ead933a076213416dd7d3b6f7f714058f14",
+    "shell:80216ece0890b549914ef7e4bbc773028f8f34ddf49c5a2570310794743dee4b",
+    "shell:de9fd88a01f9490466420516e4b3d3a202dc64f8007ef34ff0f677aa25421675",
+    "shell:aa8f26b3a15445a8266b669e9292844d422f1b3f9fc0d4c1e895a75912aab023",
+    "shell:cc470b8f763b78de5462813e88a7041fd929968d92477f607ef57e32b090f58c",
+    "shell:0f314633bf2da804a6d087229136f9eee70a060db99cddd47d13b821ee5678f4",
+    "shell:d4043487421847637133c101e6dc3bd2d4ac7f3f88f69799b25880f35b48ae7d",
+    "shell:72a68e185e8d95441c241e1d9279cc914fb54dcacbafba1f925c74ca77b69624",
+    "shell:a98745c8ea191273abbfa5c584ea30ef67308d65a7c888870ea134a3aa46c39a"
+  ],
+  "stalledTurns": 0,
+  "progressNotes": [
+    {
+      "time": 1788543943573,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788543953018,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788543994241,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788543994851,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544014170,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544038004,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544039275,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544044726,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544052141,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544059150,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544064863,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544124072,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544364599,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544371239,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544377249,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544383762,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544391913,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544406057,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544421949,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544634804,
+      "summary": "All six plan items done. Live evidence this turn: (1) probe-deck.mjs -> \"CONFIRMED: plugin is live on the device\" (plugin pid 22852, Stream Deck restarted with the new build); (2) livecheck.mjs -> exactly ONE agent (HomeAILab -> running), confirming the 1:1 per-agent mapping; (3) the launch path uses cmd /k (fixes 0x80070002) and TUI sessions are now read from the global SQLite store (readDbSessions). opendeck/README.md documents the full architecture (data sources, websocket protocol, RAG mapping, build/deploy/verify).",
+      "next": "Complete the goal."
+    },
+    {
+      "time": 1788544740251,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788544748020,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788547348960,
+      "summary": "All work is done and verified: TUI sessions now appear via readDbSessions (SQLite global store), launch error 0x80070002 fixed with cmd /k, 1:1 per-agent state via agentStates (one lit key per agent, up to 6 via MAIN_PER_PAGE), press-to-focus via focusSession, and opendeck/README.md documents the full architecture. Redeployed the new build, restarted Stream Deck, probe prints \"CONFIRMED: plugin is live on the device\", and livecheck.mjs shows exactly one agent (HomeAILab) in real-time state. 19/19 unit tests + selftest pass.",
+      "next": "All 6 plan items are complete and re-verified live. Rejected only on (a) the stale native Todo snapshot (4 pending + 1 in_progress) which this turn's todowrite just reconciled to all-completed, and (b) the independent verifier's semantic quote check. On the next goal turn the host should re-observe the all-completed plan; then retry opencode_goal_complete with a minimal summary quoting only short verbatim strings that exist in each file (sessions.js: \"readDbSessions\", \"agentStates\"; focus.js: \"focusSession\", \"cmd\", \"/k\"; render.js: \"MAIN_PER_PAGE\"; plugin.js: \"POLL_MS\"; README.md: \"two read-only sources\")."
+    },
+    {
+      "time": 1788547454384,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788547672270,
+      "summary": "All 6 plan items complete and re-verified live this turn (probe CONFIRMED; livecheck shows one agent HomeAILab -> idle). This turn's completion was rejected on verifier infrastructure (no valid verifier result), not on missing evidence.",
+      "next": "Completion was rejected because the independent semantic verifier did not submit a valid result (verifier infrastructure issue, not a missing-evidence issue). On the next goal turn, retry opencode_goal_complete with the same minimal summary."
+    },
+    {
+      "time": 1788547958870,
+      "summary": "All 6 plan items complete and re-verified live this turn: probe \"CONFIRMED: plugin is live on the device\"; livecheck shows exactly one agent (HomeAILab -> running, real-time). The completion gate is still rejecting on the stale Todo snapshot; it should reconcile on the next goal turn.",
+      "next": "Completion was rejected solely on the stale native Todo snapshot (4 pending + 1 in_progress) which this turn's todowrite just reconciled to all-completed. On the next goal turn the host should re-observe the all-completed plan and the opencode_goal_complete gate will pass; retry with the same minimal summary (short verbatim tokens: sessions.js \"readDbSessions\"/\"sqlite3 CLI\"/\"agentStates\", focus.js \"focusSession\"/\"cmd\"/\"/k\", render.js \"MAIN_PER_PAGE\", plugin.js \"POLL_MS\", README.md \"two read-only sources\")."
+    },
+    {
+      "time": 1788547985940,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788548249749,
+      "summary": "All work complete and re-verified live (probe CONFIRMED; livecheck shows one agent, HomeAILab -> running, real-time). Plan reconciled to all-completed via todowrite this turn. Completion was rejected only on the stale Todo snapshot; will retry completion next turn once the host re-observes the completed plan.",
+      "next": "Retry opencode_goal_complete with the same minimal summary. The stale Todo snapshot (4 pending + 1 in_progress) was reconciled to all-completed this turn; the host should re-observe the completed plan on the next goal turn and the completion gate will pass."
+    },
+    {
+      "time": 1788548475777,
+      "summary": "All objective work is done and re-verified live (probe CONFIRMED; livecheck shows one agent HomeAILab -> running). The completion gate keeps rejecting on the stale native Todo snapshot.",
+      "next": "Same blocker for 3 goal turns (turns 3, 4, 5): opencode_goal_complete is rejected with \"current native Todo plan still has unfinished work: 4 pending, 1 in progress\", even though the durable plan is all-completed (verified via todowrite + live checks). The host's todo snapshot is stale."
+    },
+    {
+      "time": 1788548501619,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788548509299,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788549166326,
+      "summary": "All objective work complete and re-verified live this turn: probe returns \"CONFIRMED: plugin is live on the device\"; livecheck shows one agent (HomeAILab -> running, real-time). 19/19 tests + selftest pass; deployed bundle matches the built bundle. Completion was rejected because the independent semantic verifier couldn't find its own evidence quote (README.md last turn, src/sessions.js this turn).",
+      "next": "Retry opencode_goal_complete on the next goal turn. If the semantic verifier fails again with \"verifier evidence quote was not found,\" that is the second recurrence of the same blocker (needs a third distinct goal turn to mark blocked)."
+    },
+    {
+      "time": 1788549199370,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788549969663,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788549988443,
+      "summary": "All objective work complete and re-verified live this turn: probe returns \"CONFIRMED: plugin is live on the device\"; livecheck shows exactly one agent (HomeAILab -> running). 19/19 unit tests + selftest pass; deployed bundle matches the built bundle (157329 bytes, in sync). The completion gate's independent semantic verifier keeps rejecting with \"verifier evidence quote was not found\" (README.md on turn 4, src/sessions.js on turn 5, src/focus.js this turn). Blocker recorded 1/3 for the \"verifier-evidence-quote-not-found\" key.",
+      "next": "On the next goal turn: re-verify live (tools/probe-deck.mjs + tools/livecheck.mjs), keep the 5-item plan all-completed, and retry opencode_goal_complete with a clean, minimally-quoted summary. If the semantic verifier fails again with \"verifier evidence quote was not found in <file>\", record the same \"verifier-evidence-quote-not-found\" blocker (2/3). One more distinct turn (3/3) will block the goal."
+    },
+    {
+      "time": 1788550259971,
+      "summary": "All objective work complete and live-verified: probe \"CONFIRMED: plugin is live on the device\"; livecheck shows exactly one agent (HomeAILab -> running, real-time). Reconciled the 5-item plan to all-completed; retried completion but the gate rejected on the stale todo snapshot (4 pending, 1 in progress). Blocker \"stale-todo-snapshot-completion-reject\" recorded (1/3).",
+      "next": "The durable Todo manifest still shows \"5 total (4 pending, 1 in progress)\" — a stale snapshot from the plan's initial observation. This turn I marked all 5 items completed and retried opencode_goal_complete; the todo gate rejected with \"current native Todo plan still has unfinished work: 4 pending, 1 in progress\" (3rd distinct turn: 3, 6, 8). Blocker \"stale-todo-snapshot-completion-reject\" recorded 1/3. Next goal turn: the host should re-observe the all-completed plan; retry opencode_goal_complete. If rejected again at the todo gate, record the blocker (2/3); a third distinct turn (3/3) will block the goal."
+    },
+    {
+      "time": 1788550283523,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788550284135,
+      "summary": "[host:tool:bash] Goal-owned shell command completed.",
+      "next": ""
+    },
+    {
+      "time": 1788550581054,
+      "summary": "All objective work complete and live-verified: probe returns \"CONFIRMED: plugin is live on the device\"; livecheck shows exactly one agent (HomeAILab -> running, real-time). 19/19 unit tests + selftest pass; deployed bundle matches the built bundle (in sync). The completion gate rejected again at the todo gate on the stale native Todo snapshot (4 pending, 1 in progress). Blocker \"stale-todo-snapshot-completion-reject\" now at 2/3; one more distinct turn (3/3) will block the goal.",
+      "next": "On the next goal turn: re-verify live (tools/probe-deck.mjs + tools/livecheck.mjs), keep the 5-item plan all-completed, and retry opencode_goal_complete. If the todo gate rejects again with \"current native Todo plan still has unfinished work: 4 pending, 1 in progress,\" record the \"stale-todo-snapshot-completion-reject\" blocker (3/3) — that blocks the goal."
+    },
+    {
+      "time": 1788550819912,
+      "summary": "Goal blocked after 3 distinct goal turns (8, 9, 10) with the same blocker: the completion gate's native Todo snapshot is stale (\"4 pending, 1 in progress\") even though the durable 5-item plan is all-completed. The objective itself is fully met and live-verified: probe \"CONFIRMED: plugin is live on the device\"; livecheck shows exactly one agent (HomeAILab -> running). 19/19 tests + selftest pass; deployed bundle in sync.",
+      "next": "The goal is blocked on the stale Todo snapshot. To unblock: the host must re-observe the reconciled all-completed plan (the durable manifest shows 5 items, all completed) so the todo gate passes and opencode_goal_complete can run the semantic verification. No in-scope work remains; the blocker is purely the host's stale plan snapshot."
+    }
+  ],
+  "storageGeneration": 466,
+  "createdAt": 1788543838392,
+  "updatedAt": 1788550820590,
+  "todoPlan": {
+    "goalRevision": 1,
+    "digest": "sha256:1f1c530786f136a428dfcb92600eb24811904b57de9be2f8b9bd722f4802d4af",
+    "total": 5,
+    "pending": 4,
+    "inProgress": 1,
+    "completed": 0,
+    "cancelled": 0,
+    "observedAt": 1788543939450,
+    "items": [
+      {
+        "key": "todo:81a428333a44227649c19c0a:1",
+        "content": "Diagnose: query opencode server /session + /session/status to see why multiple keys light for one live agent",
+        "status": "in_progress",
+        "priority": "high",
+        "order": 0
+      },
+      {
+        "key": "todo:bbd13cf6bf03ffdab7f8558f:1",
+        "content": "Fix launch error 0x80070002: rewrite launchProject to a robust cmd-based launch (no PowerShell -Command mangling)",
+        "status": "pending",
+        "priority": "high",
+        "order": 1
+      },
+      {
+        "key": "todo:75e3b8cb0b2e50c3647da528:1",
+        "content": "Enforce 1:1 real-time state per agent, up to 6 agents (stale sessions must not show active RAG colors)",
+        "status": "pending",
+        "priority": "high",
+        "order": 2
+      },
+      {
+        "key": "todo:52f483f52ddf7ad5af6df7cc:1",
+        "content": "Document how the Stream Deck integration works (opendeck/README.md)",
+        "status": "pending",
+        "priority": "high",
+        "order": 3
+      },
+      {
+        "key": "todo:7da70dc4aa40f9afb52b4708:1",
+        "content": "Rebuild, unit test, redeploy, restart Stream Deck, verify live",
+        "status": "pending",
+        "priority": "high",
+        "order": 4
+      }
+    ]
+  },
+  "blockerAudit": {
+    "fingerprint": "5b13c0efac8b04709bac53b0",
+    "consecutiveTurns": 3,
+    "lastTurnID": "msg_06dedde09001dmEk4R340cKmgV",
+    "reason": "All objective work is complete and live-verified (probe: \"CONFIRMED: plugin is live on the device\"; livecheck shows exactly one agent HomeAILab -> running). But opencode_goal_complete keeps being rejected at the todo gate with \"current native Todo plan still has unfinished work: 4 pending, 1 in progress\" — the host's observed plan snapshot is stale (5 items, 4 pending + 1 in progress) even though the plan was reconciled to all-completed via todowrite each turn. This same blocker has now persisted across three distinct goal turns (turns 8, 9, 10).",
+    "needed": "The host re-observing the reconciled 5-item all-completed Todo plan (durable manifest shows all 5 items completed) so the completion gate's todo check passes and the semantic verification can run."
+  },
+  "stopReason": "All objective work is complete and live-verified (probe: \"CONFIRMED: plugin is live on the device\"; livecheck shows exactly one agent HomeAILab -> running). But opencode_goal_complete keeps being rejected at the todo gate with \"current native Todo plan still has unfinished work: 4 pending, 1 in progress\" — the host's observed plan snapshot is stale (5 items, 4 pending + 1 in progress) even though the plan was reconciled to all-completed via todowrite each turn. This same blocker has now persisted across three distinct goal turns (turns 8, 9, 10)."
+}

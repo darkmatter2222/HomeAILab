@@ -1,0 +1,66 @@
+# AIPerf benchmark config: RTX 5090 vLLM (RedPCv2) — Qwen3.8-27B NVFP4
+#
+# Endpoint : http://192.168.86.37:8201  (vLLM, model alias "qwen3.8",
+#              router public alias "local-coding")
+# Artifacts: written under ./results/<run> (absolute path resolved by the .bat)
+#
+# Usage: aiperf profile --config 5090-benchmark.yaml
+schemaVersion: "2.0"
+
+benchmark:
+  model: qwen3.8
+  endpoint:
+    url: http://192.168.86.37:8201
+    type: chat
+    streaming: true
+  dataset:
+    type: synthetic
+    entries: 64
+    # ISL/OSL tuned to the 5090 workload: realistic coding-agent-style
+    # prompts (512-in / 256-out tokens).
+    prompts: {isl: 512, osl: 256}
+  # Pin fixed, distinct ZMQ ports for the three internal proxies. The default
+  # config already uses distinct ports (5661/5662, 5663/5664, 5665/5666), but
+  # a transient "Address in use" error on a random high port indicates a race
+  # in AIPerf's own ZMQ socket init. The `runtime` block holds the comm config.
+  runtime:
+    communication:
+      type: tcp
+      host: 127.0.0.1
+      records_port: 5557
+      credit_router_port: 5564
+      control_port: 5667
+      event_bus_proxy: {frontend_port: 5663, backend_port: 5664}
+      dataset_manager_proxy: {frontend_port: 5661, backend_port: 5662}
+      raw_inference_proxy: {frontend_port: 5665, backend_port: 5666}
+  tokenizer:
+    # 'builtin' = zero-network tiktoken (o200k_base). Avoids the HuggingFace
+    # fetch (and its SSL cert-chain warning) since qwen3.8 isn't a valid
+    # HF repo id. For exact Qwen token counts, swap to the real tokenizer
+    # id once the HF repo is published, or a local path to a cached tokenizer.
+    name: builtin
+  phases:
+    # Optional warmup (50 requests) then a concurrency-8 profiling phase
+    # of 500 streaming requests.
+    - name: warmup
+      type: concurrency
+      concurrency: 8
+      requests: 50
+    - name: profiling
+      type: concurrency
+      concurrency: 8
+      requests: 500
+  artifacts:
+    # Overridden at launch: the .bat sets AIPERF_RESULTS_DIR and this
+    # resolves to a timestamped results/ subdirectory.
+    dir: ${AIPERF_RESULTS_DIR:./results}
+    summary: [json]
+    records: [jsonl]
+    auto_plot: false
+    export_outputs_json: false
+
+# Optional concurrency sweep (commented out — uncomment to run 1,2,4,8,16):
+# sweep:
+#   type: grid
+#   parameters:
+#     concurrency: [1, 2, 4, 8, 16]

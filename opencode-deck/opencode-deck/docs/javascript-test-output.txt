@@ -1,0 +1,13 @@
+✔ pending requests survive idle and clear independently (1.224527ms)
+✔ child idle cannot hide parent activity (0.22565ms)
+✔ duplicate requests do not increase count (0.243166ms)
+✔ session error does not invent human input (0.201594ms)
+✔ deleted sessions remove request state (0.204919ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 135.527507

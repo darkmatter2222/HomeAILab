@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: opencode-deck
+Version: 1.0.0
+Summary: Local OpenCode presence and animated Stream Deck Mini controller
+Requires-Python: >=3.11
+License-File: LICENSE
+Requires-Dist: Pillow<13,>=10.4
+Requires-Dist: psutil==7.2.2
+Requires-Dist: streamdeck==0.10.0
+Requires-Dist: hidapi==0.15.0
+Dynamic: license-file

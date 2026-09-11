@@ -1,0 +1,28 @@
+test_all_empty_pixels_are_black (test_system.ArtTests.test_all_empty_pixels_are_black) ... ok
+test_every_active_state_animates (test_system.ArtTests.test_every_active_state_animates) ... ok
+test_native_mini_image_encoding_and_packetization (test_system.ArtTests.test_native_mini_image_encoding_and_packetization) ... ok
+test_press_callback_only_uses_down_and_rendered_generation (test_system.ArtTests.test_press_callback_only_uses_down_and_rendered_generation) ... ok
+test_actual_http_register_update_focus_delete (test_system.HTTPTests.test_actual_http_register_update_focus_delete) ... ok
+test_auth_and_origin_rejected (test_system.HTTPTests.test_auth_and_origin_rejected) ... ok
+test_blank_press_does_not_focus (test_system.HTTPTests.test_blank_press_does_not_focus) ... ok
+test_dead_real_process_removed (test_system.HTTPTests.test_dead_real_process_removed) ... ok
+test_node_bridge_round_trip_and_broker_recovery (test_system.HTTPTests.test_node_bridge_round_trip_and_broker_recovery) ... ok
+test_pid_reuse_wrong_creation_time_is_rejected (test_system.HTTPTests.test_pid_reuse_wrong_creation_time_is_rejected) ... ok
+test_ready_only_in_device_frame_and_relinquishes_slot (test_system.HTTPTests.test_ready_only_in_device_frame_and_relinquishes_slot) ... ok
+test_singleton_lock (test_system.LockTests.test_singleton_lock) ... ok
+test_colors_and_input_priority (test_system.ModelTests.test_colors_and_input_priority) ... ok
+test_concurrent_registration (test_system.ModelTests.test_concurrent_registration) ... ok
+test_death_clears_even_with_fresh_heartbeat (test_system.ModelTests.test_death_clears_even_with_fresh_heartbeat) ... ok
+test_invalid_snapshot_rejected (test_system.ModelTests.test_invalid_snapshot_rejected) ... ok
+test_process_identity_cannot_be_replaced (test_system.ModelTests.test_process_identity_cannot_be_replaced) ... ok
+test_repeated_registration_is_idempotent (test_system.ModelTests.test_repeated_registration_is_idempotent) ... ok
+test_retry_is_running (test_system.ModelTests.test_retry_is_running) ... ok
+test_reused_slot_rejects_old_press (test_system.ModelTests.test_reused_slot_rejects_old_press) ... ok
+test_sequences_and_retired_producers (test_system.ModelTests.test_sequences_and_retired_producers) ... ok
+test_six_stable_slots_and_overflow (test_system.ModelTests.test_six_stable_slots_and_overflow) ... ok
+test_stale_state_is_unknown_not_false_idle (test_system.ModelTests.test_stale_state_is_unknown_not_false_idle) ... ok
+
+----------------------------------------------------------------------
+Ran 23 tests in 9.533s
+
+OK
