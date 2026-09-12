@@ -363,21 +363,23 @@ REM ============================================================================
 
 set "REAL_OPENCODE="
 
-for /f "delims=" %%I in ('where.exe opencode.exe 2^>nul') do (
+REM Skip the OpenCode Deck shim (.opencode-deck\bin): calling it would re-launch
+REM opencode in a managed window instead of inside this terminal.
+for /f "delims=" %%I in ('where.exe opencode.exe 2^>nul ^| findstr /L /V /C:".opencode-deck\bin"') do (
     if /I not "%%~fI"=="%~f0" (
         set "REAL_OPENCODE=%%~fI"
         goto :found_opencode
     )
 )
 
-for /f "delims=" %%I in ('where.exe opencode.cmd 2^>nul') do (
+for /f "delims=" %%I in ('where.exe opencode.cmd 2^>nul ^| findstr /L /V /C:".opencode-deck\bin"') do (
     if /I not "%%~fI"=="%~f0" (
         set "REAL_OPENCODE=%%~fI"
         goto :found_opencode
     )
 )
 
-for /f "delims=" %%I in ('where.exe opencode 2^>nul') do (
+for /f "delims=" %%I in ('where.exe opencode 2^>nul ^| findstr /L /V /C:".opencode-deck\bin"') do (
     if /I not "%%~fI"=="%~f0" (
         set "REAL_OPENCODE=%%~fI"
         goto :found_opencode

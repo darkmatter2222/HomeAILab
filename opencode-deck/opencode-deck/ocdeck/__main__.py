@@ -28,7 +28,7 @@ def main():
         elif args.command == 'identity': print(json.dumps(identity(args.pid)))
         elif args.command == 'launch':
             from .launcher import launch
-            launch(args.args[1:] if args.args[:1] == ['--'] else args.args)
+            return launch(args.args[1:] if args.args[:1] == ['--'] else args.args)
         elif args.command == 'route':
             from .launcher import route
             return route(args.args[1:] if args.args[:1] == ['--'] else args.args)

@@ -16,8 +16,7 @@ def route(args):
                 'agent', 'completion', 'db', 'plugin'}
     passthrough = any(a in ('--help', '-h', '--version', '-v') for a in args) or (args and args[0] in commands)
     if not passthrough:
-        launch(args)
-        return 0
+        return launch(args)
     root = home()
     install = read_json(root / 'install.json')
     spec = root / 'launches' / (str(uuid.uuid4()) + '.json')
@@ -44,9 +43,29 @@ def launch(args, cwd=None):
     spec = root / 'launches' / (key + '.json')
     token = 'OpenCode [' + key + ']'
     atomic_json(spec, {'id': key, 'args': args, 'cwd': cwd or os.getcwd(), 'windowToken': token})
+    # DETACHED_PROCESS keeps wt from inheriting this console, so the launching terminal can
+    # exit as soon as the managed window is confirmed live.
     subprocess.Popen([wt, '-w', key, 'new-tab', '--title', token, '--suppressApplicationTitle',
                       sys.executable, '-m', 'ocdeck', 'worker', str(spec)],
-                     close_fds=True)
+                     close_fds=True, creationflags=subprocess.DETACHED_PROCESS)
+    # A detached wt.exe returns as soon as it accepts the request, so its exit
+    # code proves nothing; the worker writing its binding file is the proof
+    # that the new tab is live.
+    binding = spec.with_suffix('.binding.json')
+    deadline = time.time() + 20
+    while time.time() < deadline and not binding.exists():
+        time.sleep(.1)
+    if binding.exists():
+        return 0
+    for path in (spec, binding):
+        path.unlink(missing_ok=True)
+    print('ocdeck: the managed window did not start (timed out waiting for the new tab).',
+          file=sys.stderr)
+    try:
+        input('Press Enter to close this terminal.')
+    except EOFError:
+        pass
+    return 1
 
 
 def worker(spec_path):
