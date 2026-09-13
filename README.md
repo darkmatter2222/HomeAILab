@@ -1,3 +1,7 @@
+> **Support my work**
+>
+> If this project has helped you, consider supporting my work on [**Buy Me a Coffee**](https://buymeacoffee.com/j6oiubzfnh).
+
 # HomeAILab — Qwen3.8-27B GPU Inference Fleet
 
 A working, single-user GPU inference fleet that serves **Qwen3.8-27B** (abliterated
